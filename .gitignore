@@ -1,0 +1,19 @@
+# ignore files
+*~
+*.swp
+*.orig
+*.bak
+*.log
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.vscode
+go.work.sum
+
+# ignore folders
+/dist/
+/build/
