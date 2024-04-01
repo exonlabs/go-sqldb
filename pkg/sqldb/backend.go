@@ -10,5 +10,11 @@ var BACKENDS = []string{
 
 type Engine interface {
 	BackendName() string
-	FormatStatment(string) string
+	GenSchema(string, Model) ([]string, error)
+	// FormatStatment(string) string
+}
+
+type BackendManager interface {
+	InteractiveConfig(Options) (Options, error)
+	InteractiveSetup(Options) error
 }

@@ -1,64 +1,66 @@
 package sqldb
 
-import "github.com/exonlabs/go-utils/pkg/types"
+type TableMeta = struct {
+	// custom options for special database uses
+	Options Options
 
-// example:
-//
-//	ColumnSchema{"col1", "VARCHAR(128) NOT NULL", "UNIQUE INDEX"}
-//	ColumnSchema{"col2", "INTEGER", "INDEX"}
-//	ColumnSchema{"col3", "TEXT", ""}
-//	ColumnSchema{"col4", "BOOLEAN NOT NULL DEFAULT 0", ""}
-type ColumnSchema struct {
-	Name string
-	// SQL column type name and definition
-	Definition string
-	// space seperated mix of: PRIMARY, UNIQUE, INDEX
-	Constraint string
+	// Table column definitions
+	//	https://www.w3schools.com/sql/sql_create_table.asp
+	// 	https://www.w3schools.com/sql/sql_datatypes.asp
+	//
+	// 	{column_name, datatype [, constraint]}
+	//	constraint: is optional space seperated mix of {PRIMARY|UNIQUE|INDEX}.
+	//	constraints can be added per column or globaly per table.
+	//
+	// Example:
+	//
+	//	{"col1", "VARCHAR(128) NOT NULL", "UNIQUE INDEX"}
+	//	{"col2", "INTEGER", "INDEX"}
+	//	{"col3", "TEXT"}
+	//	{"col4", "BOOLEAN NOT NULL DEFAULT 0"}
+	Columns [][]string
+
+	// Table constraints definitions
+	// 	https://www.w3schools.com/sql/sql_constraints.asp
+	//
+	// Example:
+	//
+	//	`PRIMARY KEY (col1)`
+	//	`FOREIGN KEY (col1) REFERENCES table1 (col2) ON UPDATE CASCADE`
+	//	`UNIQUE (col1,col2)`
+	//	`CHECK (col1>=10 AND col2="val")`
+	//
+	// with Naming (for ALTER modifications):
+	//
+	//	`CONSTRAINT pk_name PRIMARY KEY (col1,col2)`
+	//	`CONSTRAINT uc_name UNIQUE (col1)`
+	//	`CONSTRAINT ck_name CHECK (col1 IN (0,1,2))`
+	Constraints []string
 }
-
-// example:
-//
-//	ConstraintSchema{"c1", "FOREIGN KEY ("col1") REFERENCES "table1" ("col1")"}
-//	ConstraintSchema{"c2", "CHECK ("col2" IN (0,1,2))"}
-type ConstraintSchema struct {
-	Name       string
-	Definition string
-}
-
-type TableSchema = struct {
-	Options     Options
-	Columns     []ColumnSchema
-	Constraints []ConstraintSchema
-}
-
-type Data = types.Dict
-type DataAdapter = func(any) (any, error)
 
 type Model interface {
 	TableName() string
-	TableSchema() *TableSchema
+	TableMeta() *TableMeta
+}
+type ModelSetAutoGuid interface {
+	SetAutoGuid()
+}
+type ModelDefaultOrders interface {
 	DefaultOrders() []string
+}
+type ModelDataReaders interface {
 	DataReaders() map[string]DataAdapter
+}
+type ModelDataWriters interface {
 	DataWriters() map[string]DataAdapter
-	UpgradeSchema(*Session, ...string) error
-	InitializeData(*Session, ...string) error
+}
+type ModelUpgradeSchema interface {
+	UpgradeSchema(*Session, string) error
+}
+type ModelInitializeData interface {
+	InitializeData(*Session, string) error
 }
 
-type BaseModel struct {
-}
+type ModelAutoGuid struct{}
 
-func (dbm *BaseModel) DefaultOrders() []string {
-	return nil
-}
-func (dbm *BaseModel) DataReaders() map[string]DataAdapter {
-	return nil
-}
-func (dbm *BaseModel) DataWriters() map[string]DataAdapter {
-	return nil
-}
-func (dbm *BaseModel) UpgradeSchema(dbs *Session, tbl ...string) error {
-	return nil
-}
-func (dbm *BaseModel) InitializeData(dbs *Session, tbl ...string) error {
-	return nil
-}
+func (*ModelAutoGuid) SetAutoGuid() {}

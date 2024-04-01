@@ -42,11 +42,11 @@ func (dbs *Session) RollBack() error {
 	return nil
 }
 
-func (dbs *Session) Execute(stmt string, params ...any) error {
+func (dbs *Session) Execute(sql string, params ...any) error {
 	return nil
 }
 
-func (dbs *Session) FetchAll(stmt string, params ...any) ([]Data, error) {
+func (dbs *Session) FetchAll(sql string, params ...any) ([]Data, error) {
 	return nil, nil
 }
 
