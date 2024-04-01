@@ -3,9 +3,20 @@ package sqldb
 import (
 	"errors"
 	"fmt"
+
+	"github.com/exonlabs/go-utils/pkg/types"
+	"github.com/exonlabs/go-utils/pkg/xlog"
 )
 
-// Define common errors
+type Logger = xlog.Logger
+type Options = types.Dict
+
+type Data = types.Dict
+type DataAdapter = func(any) (any, error)
+
+const SQL_PLACEHOLDER = "$?"
+
+// common errors
 var (
 	ErrError     = errors.New("")
 	ErrOpen      = fmt.Errorf("%wopen failed", ErrError)
