@@ -8,7 +8,7 @@ import (
 )
 
 type Query struct {
-	session *Session
+	handler *Handler
 	model   Model
 
 	// runtime table name to use, this allows for mapping
@@ -31,13 +31,13 @@ type Query struct {
 	lasterr error
 }
 
-func newQuery(dbs *Session, dbm Model) *Query {
+func newQuery(dbh *Handler, model Model) *Query {
 	q := &Query{
-		session:   dbs,
-		model:     dbm,
-		tablename: dbm.TableName(),
+		handler:   dbh,
+		model:     model,
+		tablename: model.TableName(),
 	}
-	if mdl, ok := dbm.(ModelDefaultOrders); ok {
+	if mdl, ok := model.(ModelDefaultOrders); ok {
 		q.orderby = mdl.DefaultOrders()
 	}
 	return q
@@ -46,130 +46,138 @@ func newQuery(dbs *Session, dbm Model) *Query {
 ////////////////////////////////////////// Creation
 
 // set runtime table name instead of default
-func (dbq *Query) Table(name string) *Query {
-	dbq.tablename = name
-	return dbq
+func (q *Query) Table(tblname string) *Query {
+	if tblname != "" {
+		q.tablename = tblname
+	}
+	return q
 }
 
 // set columns
-func (dbq *Query) Columns(columns ...string) *Query {
-	dbq.columns = columns
-	return dbq
+func (q *Query) Columns(columns ...string) *Query {
+	q.columns = columns
+	return q
 }
 
 // add filters
-func (dbq *Query) Filter(expr string, params ...any) *Query {
-	dbq.filters = append(dbq.filters, expr)
-	dbq.execargs = append(dbq.execargs, params...)
-	return dbq
-}
-
-// add filters
-func (dbq *Query) FilterBy(column string, value any) *Query {
-	cond := ""
-	if len(dbq.filters) > 0 {
-		cond = "AND "
+func (q *Query) Filter(expr string, params ...any) *Query {
+	if expr != "" {
+		q.filters = append(q.filters, expr)
+		q.execargs = append(q.execargs, params...)
 	}
-	dbq.filters = append(
-		dbq.filters, cond+column+"="+SQL_PLACEHOLDER)
-	dbq.execargs = append(dbq.execargs, value)
-	return dbq
+	return q
+}
+
+// add filters
+func (q *Query) FilterBy(column string, value any) *Query {
+	if column != "" {
+		cond := ""
+		if len(q.filters) > 0 {
+			cond = "AND "
+		}
+		q.filters = append(
+			q.filters, cond+column+"="+SQL_PLACEHOLDER)
+		q.execargs = append(q.execargs, value)
+	}
+	return q
 }
 
 // add grouping
-func (dbq *Query) GroupBy(groupby ...string) *Query {
-	dbq.groupby = groupby
-	return dbq
+func (q *Query) GroupBy(groupby ...string) *Query {
+	q.groupby = groupby
+	return q
 }
 
 // add ordering: "colname ASC|DESC"
-func (dbq *Query) OrderBy(orderby ...string) *Query {
-	dbq.orderby = orderby
-	return dbq
+func (q *Query) OrderBy(orderby ...string) *Query {
+	q.orderby = orderby
+	return q
 }
 
 // add having expr
-func (dbq *Query) Having(expr string, val any) *Query {
-	dbq.having = expr
-	dbq.execargs = append(dbq.execargs, val)
-	return dbq
+func (q *Query) Having(expr string, val any) *Query {
+	if expr != "" {
+		q.having = expr
+		q.execargs = append(q.execargs, val)
+	}
+	return q
 }
 
 // add limit
-func (dbq *Query) Limit(limit int) *Query {
-	dbq.limit = limit
-	return dbq
+func (q *Query) Limit(limit int) *Query {
+	q.limit = limit
+	return q
 }
 
 // add offset
-func (dbq *Query) Offset(offset int) *Query {
-	dbq.offset = offset
-	return dbq
+func (q *Query) Offset(offset int) *Query {
+	q.offset = offset
+	return q
 }
 
 ////////////////////////////////////////// Operations
 
 // return all elements matching select query
-func (dbq *Query) All() ([]Data, error) {
-	if dbq.lasterr != nil {
-		return nil, dbq.lasterr
+func (q *Query) All() ([]Data, error) {
+	if q.lasterr != nil {
+		return nil, q.lasterr
 	}
 
-	backend := dbq.session.handler.Engine.BackendName()
+	backend := q.handler.engine.BackendName()
 	limitPrefix := ""
 	if backend == MSSQL_BACKEND {
-		if dbq.limit > 0 && len(dbq.orderby) == 0 {
-			limitPrefix = fmt.Sprintf("TOP(%v) ", dbq.limit)
+		if q.limit > 0 && len(q.orderby) == 0 {
+			limitPrefix = fmt.Sprintf("TOP(%v) ", q.limit)
 		}
 	}
 
 	sql := "SELECT " + limitPrefix
-	if len(dbq.columns) > 0 {
-		sql += strings.Join(dbq.columns, ", ")
+	if len(q.columns) > 0 {
+		sql += strings.Join(q.columns, ", ")
 	} else {
 		sql += "*"
 	}
-	sql += " FROM " + dbq.tablename
+	sql += " FROM " + q.tablename
 
-	if len(dbq.filters) > 0 {
-		sql += "\nWHERE " + strings.Join(dbq.filters, " ")
+	if len(q.filters) > 0 {
+		sql += "\nWHERE " + strings.Join(q.filters, " ")
 	}
-	if len(dbq.groupby) > 0 {
-		sql += "\nGROUP BY " + strings.Join(dbq.groupby, ", ")
+	if len(q.groupby) > 0 {
+		sql += "\nGROUP BY " + strings.Join(q.groupby, ", ")
 	}
-	if len(dbq.having) > 0 {
-		sql += "\nHAVING " + dbq.having
+	if len(q.having) > 0 {
+		sql += "\nHAVING " + q.having
 	}
-	if len(dbq.orderby) > 0 {
-		sql += "\nORDER BY " + strings.Join(dbq.orderby, ", ")
+	if len(q.orderby) > 0 {
+		sql += "\nORDER BY " + strings.Join(q.orderby, ", ")
 	}
 	if backend == MSSQL_BACKEND {
-		if dbq.offset > 0 || dbq.limit > 0 {
+		if q.offset > 0 || q.limit > 0 {
 			sql += fmt.Sprintf(
-				"\nOFFSET %v ROWS", dbq.offset)
+				"\nOFFSET %v ROWS", q.offset)
 		}
-		if dbq.limit > 0 {
+		if q.limit > 0 {
 			sql += fmt.Sprintf(
-				"\nFETCH NEXT %v ROWS ONLY", dbq.limit)
+				"\nFETCH NEXT %v ROWS ONLY", q.limit)
 		}
 	} else {
-		if dbq.limit > 0 {
-			sql += fmt.Sprintf("\nLIMIT %v", dbq.limit)
+		if q.limit > 0 {
+			sql += fmt.Sprintf("\nLIMIT %v", q.limit)
 		}
-		if dbq.offset > 0 {
-			sql += fmt.Sprintf("\nOFFSET %v", dbq.offset)
+		if q.offset > 0 {
+			sql += fmt.Sprintf("\nOFFSET %v", q.offset)
 		}
 	}
 	sql += ";"
 
 	// run query and fetch data
-	result, err := dbq.session.FetchAll(sql, dbq.execargs...)
+	result, err := q.handler.FetchAll(sql, q.execargs...)
 	if err != nil {
 		return nil, err
 	}
 
 	// apply DataReaders adapters
-	if mdl, ok := dbq.model.(ModelDataReaders); ok {
+	if mdl, ok := q.model.(ModelDataReaders); ok {
 		if err := FormatData(mdl.DataReaders(), result); err != nil {
 			return nil, err
 		}
@@ -233,7 +241,7 @@ func (dbq *Query) Count() (int64, error) {
 	}
 	sql += ";"
 
-	result, err := dbq.session.FetchAll(sql, dbq.execargs...)
+	result, err := dbq.handler.FetchAll(sql, dbq.execargs...)
 	if err != nil {
 		return 0, err
 	}
@@ -261,7 +269,7 @@ func (dbq *Query) Insert(data Data) (string, error) {
 
 	// check and create guid in data
 	guid := ""
-	if _, ok := dbq.model.(ModelSetAutoGuid); ok {
+	if _, ok := dbq.model.(ModelAutoGuid); ok {
 		guid = data.GetString("guid", "")
 		if guid == "" {
 			guid = NewGuid()
@@ -281,7 +289,7 @@ func (dbq *Query) Insert(data Data) (string, error) {
 	sql += fmt.Sprintf("\nVALUES (%v)", strings.Join(holders, ", "))
 	sql += ";"
 
-	err := dbq.session.Execute(sql, execargs...)
+	err := dbq.handler.Execute(sql, execargs...)
 	if err != nil {
 		return "", err
 	}
@@ -296,7 +304,7 @@ func (dbq *Query) Update(data Data) (int64, error) {
 	}
 
 	// check and remove guid from data
-	if _, ok := dbq.model.(ModelSetAutoGuid); ok {
+	if _, ok := dbq.model.(ModelAutoGuid); ok {
 		data.Del("guid")
 	}
 
@@ -321,12 +329,12 @@ func (dbq *Query) Update(data Data) (int64, error) {
 
 	execargs = append(execargs, dbq.execargs...)
 
-	err := dbq.session.Execute(sql, execargs...)
+	num_rows, err := dbq.handler.Execute(sql, execargs...)
 	if err != nil {
 		return 0, err
 	}
 
-	return dbq.session.RowsAffected(), nil
+	return num_rows, nil
 }
 
 // delete from table data and return number of affected entries
@@ -340,12 +348,12 @@ func (dbq *Query) Delete() (int64, error) {
 		sql += "\nWHERE " + strings.Join(dbq.filters, " ")
 	}
 
-	err := dbq.session.Execute(sql, dbq.execargs...)
+	err := dbq.handler.Execute(sql, dbq.execargs...)
 	if err != nil {
 		return 0, err
 	}
 
-	return dbq.session.RowsAffected(), nil
+	return dbq.handler.RowsAffected(), nil
 }
 
 ////////////////////////////////////////// helpers

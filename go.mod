@@ -4,6 +4,7 @@ go 1.22.0
 
 require (
 	github.com/exonlabs/go-utils v0.3.7-0.20240408231849-993f9c42b4ee
+	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/satori/go.uuid v1.2.0
 )
 

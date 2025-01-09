@@ -42,25 +42,9 @@ type Model interface {
 	TableName() string
 	TableMeta() *TableMeta
 }
-type ModelSetAutoGuid interface {
-	SetAutoGuid()
-}
-type ModelDefaultOrders interface {
-	DefaultOrders() []string
-}
-type ModelDataReaders interface {
-	DataReaders() map[string]DataAdapter
-}
-type ModelDataWriters interface {
-	DataWriters() map[string]DataAdapter
-}
-type ModelUpgradeSchema interface {
-	UpgradeSchema(*Session, string) error
-}
-type ModelInitializeData interface {
-	InitializeData(*Session, string) error
-}
-
-type ModelAutoGuid struct{}
-
-func (*ModelAutoGuid) SetAutoGuid() {}
+type ModelAutoGuid interface{ AutoGuid() bool }
+type ModelDefaultOrders interface{ DefaultOrders() []string }
+type ModelDataReaders interface{ DataReaders() map[string]DataAdapter }
+type ModelDataWriters interface{ DataWriters() map[string]DataAdapter }
+type ModelAlterSchema interface{ AlterSchema(*Handler, string) error }
+type ModelInitialData interface{ InitialData(*Handler, string) error }

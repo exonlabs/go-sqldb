@@ -1,20 +1,23 @@
 package sqldb
 
-// all implemented backend engines
-var BACKENDS = []string{
-	SQLITE_BACKEND,
-	MYSQL_BACKEND,
-	PGSQL_BACKEND,
-	MSSQL_BACKEND,
+// all implemented backends names
+func Backends() []string {
+	return []string{
+		SQLITE_BACKEND,
+		MYSQL_BACKEND,
+		PGSQL_BACKEND,
+		MSSQL_BACKEND,
+	}
 }
 
 type Engine interface {
-	BackendName() string
-	GenSchema(string, Model) ([]string, error)
-	// FormatStatment(string) string
+	Backend() string
+	FormatSql(string) string
+	CanRetryErr(error) bool
 }
 
-type BackendManager interface {
+type Backend interface {
+	CreateSchema(string, Model) ([]string, error)
 	InteractiveConfig(Options) (Options, error)
 	InteractiveSetup(Options) error
 }

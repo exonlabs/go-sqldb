@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -21,10 +20,12 @@ var DB_OPTS = sqldb.Options{
 
 var Role *role
 
-type role struct{ *sqldb.ModelAutoGuid }
+type role struct{}
 
-func (*role) TableName() string {
-	return "roles"
+func (*role) TableName() string { return "roles" }
+func (*role) AutoGuid() bool    { return true }
+func (*role) DefaultOrders() []string {
+	return []string{"title ASC"}
 }
 func (*role) TableMeta() *sqldb.TableMeta {
 	return &sqldb.TableMeta{
@@ -40,36 +41,36 @@ func (*role) TableMeta() *sqldb.TableMeta {
 		},
 	}
 }
-func (*role) DefaultOrders() []string {
-	return []string{"title ASC"}
-}
-func (*role) InitializeData(dbs *sqldb.Session, _ string) error {
-	if dbs == nil {
-		return errors.New("invalid database session")
-	}
+func (*role) InitialData(dbh *sqldb.Handler, _ string) error {
+	// if dbs == nil {
+	// 	return errors.New("invalid database session")
+	// }
 
-	// check if default 'Administrator' role already exist
-	num, err := dbs.Query(Role).Filter("title=$?", "Administrator").Count()
-	if err != nil || num > 0 {
-		return err
-	}
+	// // check if default 'Administrator' role already exist
+	// num, err := dbs.Query(Role).Filter("title=$?", "Administrator").Count()
+	// if err != nil || num > 0 {
+	// 	return err
+	// }
 
-	// create default 'Administrator' role
-	_, err = dbs.Query(Role).Insert(sqldb.Data{
-		"title":        "Administrator",
-		"description":  "Administrator Full Access",
-		"access_level": 5,
-		"builtin":      true,
-	})
-	return err
+	// // create default 'Administrator' role
+	// _, err = dbs.Query(Role).Insert(sqldb.Data{
+	// 	"title":        "Administrator",
+	// 	"description":  "Administrator Full Access",
+	// 	"access_level": 5,
+	// 	"builtin":      true,
+	// })
+	// return err
+	return nil
 }
 
 var User *user
 
-type user struct{ *sqldb.ModelAutoGuid }
+type user struct{}
 
-func (*user) TableName() string {
-	return "users"
+func (*user) TableName() string { return "users" }
+func (*user) AutoGuid() bool    { return true }
+func (*user) DefaultOrders() []string {
+	return []string{"username ASC"}
 }
 func (*user) TableMeta() *sqldb.TableMeta {
 	return &sqldb.TableMeta{
@@ -86,40 +87,39 @@ func (*user) TableMeta() *sqldb.TableMeta {
 		},
 	}
 }
-func (*user) DefaultOrders() []string {
-	return []string{"username ASC"}
-}
-func (*user) InitializeData(dbs *sqldb.Session, _ string) error {
-	if dbs == nil {
-		return errors.New("invalid database session")
-	}
 
-	// check if default 'Admin' user already exist
-	num, err := dbs.Query(User).Filter("username=$?", "admin").Count()
-	if err != nil || num > 0 {
-		return err
-	}
+func (*user) InitialData(dbs *sqldb.Session, _ string) error {
+	// if dbs == nil {
+	// 	return errors.New("invalid database session")
+	// }
 
-	// get default 'Administrator' role
-	role, err := dbs.Query(Role).Filter("title=$?", "Administrator").One()
-	if err != nil {
-		return err
-	} else if role == nil {
-		return errors.New("default 'Administrator' role not found")
-	}
-	role_guid := role.GetString("guid", "")
-	if len(role_guid) == 0 {
-		return errors.New("invalid empty 'Administrator' role guid")
-	}
+	// // check if default 'Admin' user already exist
+	// num, err := dbs.Query(User).Filter("username=$?", "admin").Count()
+	// if err != nil || num > 0 {
+	// 	return err
+	// }
 
-	// create default 'Admin' user
-	_, err = dbs.Query(User).Insert(sqldb.Data{
-		"username":  "admin",
-		"password":  "12345",
-		"enabled":   true,
-		"role_guid": role_guid,
-	})
-	return err
+	// // get default 'Administrator' role
+	// role, err := dbs.Query(Role).Filter("title=$?", "Administrator").One()
+	// if err != nil {
+	// 	return err
+	// } else if role == nil {
+	// 	return errors.New("default 'Administrator' role not found")
+	// }
+	// role_guid := role.GetString("guid", "")
+	// if len(role_guid) == 0 {
+	// 	return errors.New("invalid empty 'Administrator' role guid")
+	// }
+
+	// // create default 'Admin' user
+	// _, err = dbs.Query(User).Insert(sqldb.Data{
+	// 	"username":  "admin",
+	// 	"password":  "12345",
+	// 	"enabled":   true,
+	// 	"role_guid": role_guid,
+	// })
+	// return err
+	return nil
 }
 
 //////////////////////////////// operations
@@ -143,7 +143,7 @@ func run_initialization(dbh *sqldb.Handler) error {
 	if err := dbh.CreateSchema(models); err != nil {
 		return err
 	}
-	return dbh.InitializeData(models)
+	return dbh.InitialData(models)
 }
 
 // func run_operations(dbh *sqldb.Handler) error {

@@ -1,6 +1,7 @@
 package sqldb
 
 import (
+	"database/sql"
 	"strings"
 )
 
@@ -12,8 +13,11 @@ const (
 type Handler struct {
 	Logger *Logger
 
-	// database backend Engine handler
-	Engine Engine
+	// database backend engine handler
+	sqlDB *sql.DB
+	sqlTX *sql.Tx
+	// engine Engine
+	// dsn    string
 
 	// session connection params
 	ConnectTimeout float64
@@ -21,24 +25,80 @@ type Handler struct {
 }
 
 func NewHandler(dbe Engine, opts Options, logger *Logger) *Handler {
-	return &Handler{
+	h := &Handler{
 		Logger: logger,
-		Engine: dbe,
+		engine: dbe,
 		ConnectTimeout: opts.GetFloat64(
 			"connect_timeout", defaultConnectTimeout),
 		RetryInterval: opts.GetFloat64(
 			"retry_interval", defaultRetryInterval),
 	}
+	h.SetConfig(opts)
+	return h
+}
+
+func (dbh *Handler) Engine() Engine {
+	return dbh.engine
 }
 
 func (dbh *Handler) Session() *Session {
 	return newSession(dbh)
 }
 
+func (dbh *Handler) SetConfig(opts Options) error {
+
+	return nil
+}
+
+// func (dbs *Session) Query(dbm Model) *Query {
+// 	return newQuery(dbs, dbm)
+// }
+
+// func (dbs *Session) IsActive() bool {
+// 	if dbs.sqlDB != nil {
+// 		return dbs.sqlDB.Ping() == nil
+// 	}
+// 	return false
+// }
+
+// func (dbs *Session) InTransaction() bool {
+// 	return dbs.sqlTX != nil
+// }
+
+// func (dbs *Session) Open() error {
+// 	return nil
+// }
+
+// func (dbs *Session) Close() error {
+// 	return nil
+// }
+
+// func (dbs *Session) Begin() error {
+// 	return nil
+// }
+
+// func (dbs *Session) Commit() error {
+// 	return nil
+// }
+
+// func (dbs *Session) RollBack() error {
+// 	return nil
+// }
+
+// func (dbs *Session) Execute(sql string, params ...any) (int64, error) {
+
+// 	return 0, nil
+// }
+
+// func (dbs *Session) FetchAll(sql string, params ...any) ([]Data, error) {
+// 	return nil, nil
+// }
+
+
 func (dbh *Handler) CreateSchema(models map[string]Model) error {
 	schema_sql := []string{}
 	for tblname, model := range models {
-		sql, err := dbh.Engine.GenSchema(tblname, model)
+		sql, err := dbh.engine.GenSchema(tblname, model)
 		if err != nil {
 			return err
 		}
@@ -56,7 +116,7 @@ func (dbh *Handler) CreateSchema(models map[string]Model) error {
 	}
 	// create tables schema
 	for _, sql := range schema_sql {
-		if err := dbs.Execute(sql); err != nil {
+		if _, err := dbs.Execute(sql); err != nil {
 			return err
 		}
 	}

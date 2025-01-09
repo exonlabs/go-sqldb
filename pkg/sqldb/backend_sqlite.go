@@ -1,29 +1,65 @@
 package sqldb
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"strings"
 	"syscall"
 
 	"github.com/exonlabs/go-utils/pkg/unix/xterm"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const SQLITE_BACKEND = "sqlite"
 
 type sqlite_engine struct {
-	Database string
+	*sql.DB
 }
 
-func SqliteEngine(opts Options) *sqlite_engine {
-	return &sqlite_engine{}
+func SqliteDB(opts Options) (*sqlite_engine, error) {
+	// // params
+	// database, _ := options["database"].(string)
+	// if len(database) == 0 {
+	// 	return nil, fmt.Errorf("invalid database configuration")
+	// }
+	// extargs, _ := options["extargs"].(string)
+	// if !strings.Contains(extargs, "_foreign_keys=") {
+	// 	extargs = "_foreign_keys=1&" + extargs
+	// }
+
+	// // create data source name
+	// dsn := fmt.Sprintf("%v?%v", database, extargs)
+
+	// sqlDB, err := sql.Open("sqlite3", dsn)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// return sqlDB, nil
+
+	return nil, nil
 }
 
-func (dbe *sqlite_engine) BackendName() string {
-	return SQLITE_BACKEND
+// return backend name
+func (*sqlite_engine) Backend() string { return SQLITE_BACKEND }
+
+// format args placeholders in sql statment
+func (*sqlite_engine) FormatSql(sql string) string {
+	return strings.Replace(sql, SQL_PLACEHOLDER, "?", -1)
 }
 
-func (dbe *sqlite_engine) GenSchema(
+// check if retry operation is practical for certain error type
+func (*sqlite_engine) CanRetryErr(err error) bool {
+	return false
+}
+
+/////////////////////////////////////////////////////////
+
+type sqlite_backend struct{}
+
+func SqliteBackend() *sqlite_backend { return &sqlite_backend{} }
+
+func (*sqlite_engine) CreateSchema(
 	tblname string, model Model) ([]string, error) {
 
 	if tblname == "" {
@@ -35,7 +71,7 @@ func (dbe *sqlite_engine) GenSchema(
 
 	columns := meta.Columns
 	// add guid column if not exist as first column
-	if _, ok := model.(ModelSetAutoGuid); ok {
+	if _, ok := model.(ModelAutoGuid); ok {
 		if columns[0][0] != "guid" {
 			columns = append([][]string{
 				{"guid", "VARCHAR(32) NOT NULL", "PRIMARY"},
@@ -101,12 +137,6 @@ func (dbe *sqlite_engine) GenSchema(
 	result = append(result, indexes...)
 	return result, nil
 }
-
-/////////////////////////////////////////////////////////
-
-type sqlite_backend struct{}
-
-func SqliteBackend() *sqlite_backend { return &sqlite_backend{} }
 
 // interactive database configuration
 func (*sqlite_backend) InteractiveConfig(opts Options) (Options, error) {
