@@ -1,31 +1,33 @@
+// Copyright (c) 2024 ExonLabs, All rights reserved.
+// Use of this source code is governed by a BSD 3-Clause
+// license that can be found in the LICENSE file.
+
 package sqldb
 
 import (
-	"encoding/hex"
-
 	uuid "github.com/satori/go.uuid"
 )
 
-// generate new GUID
+// NewGuid generates a new string guid in hex format.
 func NewGuid() string {
-	return hex.EncodeToString(
-		uuid.NewV5(uuid.NewV1(), uuid.NewV4().String()).Bytes())
+	u := uuid.NewV5(uuid.NamespaceOID, uuid.NewV1().String())
+	return u.String()
 }
 
-// apply data adapters to set of data, data is modified in place
-func FormatData(adapters map[string]DataAdapter, data []Data) error {
-	for key, fn := range adapters {
-		// ignore adapters not in data list
-		if !data[0].IsExist(key) {
-			continue
-		}
-		// loop on data and modify
-		for i := 0; i < len(data); i++ {
-			val, err := fn(data[i].Get(key, nil))
-			if err != nil {
-				return err
+// FormatData applies data adaptors functions to data map.
+// adaptor function matching is done by adaptor name and data keys.
+// data values are modified in place in the original data map.
+func FormatData(adaptors map[string]DataAdaptor, data ...Data) error {
+	for i := range data {
+		// loop adaptors and match adaptor name in data
+		for name, fn := range adaptors {
+			if oldVal, ok := data[i][name]; ok {
+				newVal, err := fn(oldVal)
+				if err != nil {
+					return err
+				}
+				data[i][name] = newVal
 			}
-			data[i].Set(key, val)
 		}
 	}
 	return nil

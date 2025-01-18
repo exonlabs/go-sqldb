@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/exonlabs/go-sqldb/pkg/sqldb"
-	"github.com/exonlabs/go-utils/pkg/xlog"
+	"github.com/exonlabs/go-utils/pkg/abc/dictx"
+	"github.com/exonlabs/go-utils/pkg/logging"
 )
 
-var DB_OPTS = sqldb.Options{
+var DB_OPTS = dictx.Dict{
 	"database":   filepath.Join(os.TempDir(), "sample.db"),
 	"extra_args": "",
 }
@@ -88,39 +89,39 @@ func (*user) TableMeta() *sqldb.TableMeta {
 	}
 }
 
-func (*user) InitialData(dbs *sqldb.Session, _ string) error {
-	// if dbs == nil {
-	// 	return errors.New("invalid database session")
-	// }
+// func (*user) InitialData(dbs *sqldb.Session, _ string) error {
+// 	// if dbs == nil {
+// 	// 	return errors.New("invalid database session")
+// 	// }
 
-	// // check if default 'Admin' user already exist
-	// num, err := dbs.Query(User).Filter("username=$?", "admin").Count()
-	// if err != nil || num > 0 {
-	// 	return err
-	// }
+// 	// // check if default 'Admin' user already exist
+// 	// num, err := dbs.Query(User).Filter("username=$?", "admin").Count()
+// 	// if err != nil || num > 0 {
+// 	// 	return err
+// 	// }
 
-	// // get default 'Administrator' role
-	// role, err := dbs.Query(Role).Filter("title=$?", "Administrator").One()
-	// if err != nil {
-	// 	return err
-	// } else if role == nil {
-	// 	return errors.New("default 'Administrator' role not found")
-	// }
-	// role_guid := role.GetString("guid", "")
-	// if len(role_guid) == 0 {
-	// 	return errors.New("invalid empty 'Administrator' role guid")
-	// }
+// 	// // get default 'Administrator' role
+// 	// role, err := dbs.Query(Role).Filter("title=$?", "Administrator").One()
+// 	// if err != nil {
+// 	// 	return err
+// 	// } else if role == nil {
+// 	// 	return errors.New("default 'Administrator' role not found")
+// 	// }
+// 	// role_guid := role.GetString("guid", "")
+// 	// if len(role_guid) == 0 {
+// 	// 	return errors.New("invalid empty 'Administrator' role guid")
+// 	// }
 
-	// // create default 'Admin' user
-	// _, err = dbs.Query(User).Insert(sqldb.Data{
-	// 	"username":  "admin",
-	// 	"password":  "12345",
-	// 	"enabled":   true,
-	// 	"role_guid": role_guid,
-	// })
-	// return err
-	return nil
-}
+// 	// // create default 'Admin' user
+// 	// _, err = dbs.Query(User).Insert(sqldb.Data{
+// 	// 	"username":  "admin",
+// 	// 	"password":  "12345",
+// 	// 	"enabled":   true,
+// 	// 	"role_guid": role_guid,
+// 	// })
+// 	// return err
+// 	return nil
+// }
 
 //////////////////////////////// operations
 
@@ -143,7 +144,8 @@ func run_initialization(dbh *sqldb.Handler) error {
 	if err := dbh.CreateSchema(models); err != nil {
 		return err
 	}
-	return dbh.InitialData(models)
+	// return dbh.InitialData(models)
+	return nil
 }
 
 // func run_operations(dbh *sqldb.Handler) error {
@@ -242,19 +244,19 @@ func main() {
 	setup := flag.Bool("setup", false, "perform database setup")
 	flag.Parse()
 
-	logger := xlog.NewStdoutLogger("main")
+	logger := logging.NewStdoutLogger("main")
 
 	switch {
 	case *debug >= 5:
-		logger.Level = xlog.TRACE4
+		logger.Level = logging.TRACE3
 	case *debug >= 3:
-		logger.Level = xlog.TRACE2
+		logger.Level = logging.TRACE2
 	case *debug >= 1:
-		logger.Level = xlog.DEBUG
+		logger.Level = logging.DEBUG
 	}
 
 	// config
-	database := DB_OPTS.GetString("database", "")
+	database := dictx.Fetch(DB_OPTS, "database", "")
 	if database == "" {
 		fmt.Printf("Error: invalid database path\n")
 		os.Exit(1)
@@ -262,14 +264,14 @@ func main() {
 	fmt.Printf("\n* Using database: %v\n", database)
 	fmt.Println("\nUsing Options:")
 	for _, k := range []string{"database", "extra_args"} {
-		if DB_OPTS.IsExist(k) {
-			fmt.Printf(" - %-11v: %v\n", k, DB_OPTS[k])
-		}
+		// if DB_OPTS.IsExist(k) {
+		// 	fmt.Printf(" - %-11v: %v\n", k, DB_OPTS[k])
+		// }
 	}
 
 	// select engine and create db handler
 	engine := sqldb.SqliteEngine(DB_OPTS)
-	dbh := sqldb.NewHandler(engine, DB_OPTS, logger)
+	// dbh := sqldb.NewHandler(engine, DB_OPTS, logger)
 
 	// database setup
 	if *setup {
