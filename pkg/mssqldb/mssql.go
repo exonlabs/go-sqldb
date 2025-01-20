@@ -4,91 +4,37 @@
 
 package mssqldb
 
-// const MSSQL_BACKEND = "mssql"
+import (
+	"database/sql"
 
-// type mssql_engine struct{}
+	"github.com/exonlabs/go-sqldb/pkg/sqldb"
+)
 
-// func MssqlEngine(opts Options) *mssql_engine {
-// 	return &mssql_engine{}
-// }
+type Engine struct {
+	sqlDB *sql.DB
 
-// func (dbe *mssql_engine) BackendName() string {
-// 	return MSSQL_BACKEND
-// }
+	// database config
+	config *sqldb.DBConfig
+}
 
-// func (dbe *mssql_engine) GenSchema(
-// 	tblname string, model Model) ([]string, error) {
+func NewEngine(cfg *sqldb.DBConfig) (*Engine, error) {
+	if err := PrepareConfig(cfg); err != nil {
+		return nil, err
+	}
 
-// 	return []string{}, nil
-// }
+	return &Engine{
+		config: cfg,
+	}, nil
+}
 
-// /////////////////////////////////////////////////////////
+func (dbe *Engine) Backend() int {
+	return sqldb.BACKEND_SQLITE
+}
 
-// type mssql_backend struct{}
+func (dbe *Engine) Config() *sqldb.DBConfig {
+	return dbe.config
+}
 
-// func MssqlBackend() *mssql_backend { return &mssql_backend{} }
-
-// // interactive database configuration
-// func (*mssql_backend) InteractiveConfig(opts Options) (Options, error) {
-// 	// con := xterm.NewConsole()
-
-// 	// if v, err := con.Required().ReadValue(
-// 	// 	"Enter database name",
-// 	// 	dictx.Fetch(opts, "database", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	dictx.Set(opts, "database", v)
-// 	// }
-
-// 	// if v, err := con.Required().ReadValue(
-// 	// 	"Enter database host IP/FQDN",
-// 	// 	dictx.Fetch(opts, "host", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	dictx.Set(opts, "host", v)
-// 	// }
-
-// 	// if v, err := con.Required().ReadNumberWLimit(
-// 	// 	"Enter database port number",
-// 	// 	dictx.GetInt(opts, "port", 0), 0, 65536); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	dictx.Set(opts, "port", v)
-// 	// }
-
-// 	// if v, err := con.ReadValue(
-// 	// 	"Enter database access username",
-// 	// 	dictx.Fetch(opts, "username", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	dictx.Set(opts, "username", v)
-// 	// }
-
-// 	// if v, err := con.Hidden().ReadValue(
-// 	// 	"Enter database access password",
-// 	// 	dictx.Fetch(opts, "password", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	dictx.Set(opts, "password", v)
-// 	// }
-
-// 	// if v, err := con.ReadValue(
-// 	// 	"Enter connection extra args",
-// 	// 	dictx.Fetch(opts, "extra_args", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	dictx.Set(opts, "extra_args", v)
-// 	// }
-
-// 	return opts, nil
-// }
-
-// // interactive database setup
-// func (*mssql_backend) InteractiveSetup(opts Options) error {
-
-// 	///////////////////////////
-// 	// TODO
-// 	//////////////////////////
-
-// 	return nil
-// }
+func (dbe *Engine) SqlDB() *sql.DB {
+	return dbe.sqlDB
+}

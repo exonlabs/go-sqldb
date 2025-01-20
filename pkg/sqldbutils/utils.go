@@ -14,7 +14,21 @@ import (
 	"github.com/exonlabs/go-sqldb/pkg/sqlitedb"
 )
 
-func InteractiveConfig(backend string, defaults dictx.Dict) (dictx.Dict, error) {
+func CreateEngine(backend string, cfg *sqldb.DBConfig) (sqldb.Engine, error) {
+	switch backend {
+	case sqldb.BACKEND(sqldb.BACKEND_SQLITE):
+		return sqlitedb.NewEngine(cfg)
+	case sqldb.BACKEND(sqldb.BACKEND_MYSQL):
+		return mysqldb.NewEngine(cfg)
+	case sqldb.BACKEND(sqldb.BACKEND_PGSQL):
+		return pgsqldb.NewEngine(cfg)
+	case sqldb.BACKEND(sqldb.BACKEND_MSSQL):
+		return mssqldb.NewEngine(cfg)
+	}
+	return nil, sqldb.ErrDBBackend
+}
+
+func InteractiveConfig(backend string, defaults dictx.Dict) (*sqldb.DBConfig, error) {
 	switch backend {
 	case sqldb.BACKEND(sqldb.BACKEND_SQLITE):
 		return sqlitedb.InteractiveConfig(defaults)
@@ -28,7 +42,7 @@ func InteractiveConfig(backend string, defaults dictx.Dict) (dictx.Dict, error) 
 	return nil, sqldb.ErrDBBackend
 }
 
-func InteractiveSetup(backend string, cfg dictx.Dict) error {
+func InteractiveSetup(backend string, cfg *sqldb.DBConfig) error {
 	switch backend {
 	case sqldb.BACKEND(sqldb.BACKEND_SQLITE):
 		return sqlitedb.InteractiveSetup(cfg)
@@ -40,18 +54,4 @@ func InteractiveSetup(backend string, cfg dictx.Dict) error {
 		return mssqldb.InteractiveSetup(cfg)
 	}
 	return sqldb.ErrDBBackend
-}
-
-func CreateEngine(backend string, cfg dictx.Dict) (sqldb.Engine, error) {
-	// switch backend {
-	// case sqldb.BACKEND(sqldb.BACKEND_SQLITE):
-	// 	return sqlitedb.Engine(cfg)
-	// case sqldb.BACKEND(sqldb.BACKEND_MYSQL):
-	// 	return mysqldb.Engine(cfg)
-	// case sqldb.BACKEND(sqldb.BACKEND_PGSQL):
-	// 	return pgsqldb.Engine(cfg)
-	// case sqldb.BACKEND(sqldb.BACKEND_MSSQL):
-	// 	return mssqldb.Engine(cfg)
-	// }
-	return nil, sqldb.ErrDBBackend
 }

@@ -8,41 +8,62 @@ import (
 	"database/sql"
 
 	_ "github.com/mattn/go-sqlite3"
-	// 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
+
+	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 )
 
 type Engine struct {
 	sqlDB *sql.DB
 
-	Database string
-	// ExtraArgs string
+	// database config
+	config *sqldb.DBConfig
 }
 
-// func SqliteDB(opts Options) (*sqlite_engine, error) {
-// 	// // params
-// 	// database, _ := options["database"].(string)
-// 	// if len(database) == 0 {
-// 	// 	return nil, fmt.Errorf("invalid database configuration")
-// 	// }
-// 	// extargs, _ := options["extargs"].(string)
-// 	// if !strings.Contains(extargs, "_foreign_keys=") {
-// 	// 	extargs = "_foreign_keys=1&" + extargs
-// 	// }
+func NewEngine(cfg *sqldb.DBConfig) (*Engine, error) {
+	if err := PrepareConfig(cfg); err != nil {
+		return nil, err
+	}
 
-// 	// // create data source name
-// 	// dsn := fmt.Sprintf("%v?%v", database, extargs)
+	return &Engine{
+		config: cfg,
+	}, nil
+}
 
-// 	// sqlDB, err := sql.Open("sqlite3", dsn)
-// 	// if err != nil {
-// 	// 	return nil, err
-// 	// }
-// 	// return sqlDB, nil
+func (dbe *Engine) Backend() int {
+	return sqldb.BACKEND_SQLITE
+}
 
-// 	return nil, nil
-// }
+func (dbe *Engine) Config() *sqldb.DBConfig {
+	return dbe.config
+}
 
-// // return backend name
-// func (*sqlite_engine) Backend() string { return SQLITE_BACKEND }
+func (dbe *Engine) SqlDB() *sql.DB {
+	return dbe.sqlDB
+}
+
+func (dbe *Engine) Open() error {
+
+	// // Apply custom options.
+	// if cfg.Options != nil {
+
+	// }
+
+	// extargs, _ := options["extargs"].(string)
+	// if !strings.Contains(extargs, "_foreign_keys=") {
+	// 	extargs = "_foreign_keys=1&" + extargs
+	// }
+
+	// // create data source name
+	// dsn := fmt.Sprintf("%v?%v", database, extargs)
+
+	// sqlDB, err := sql.Open("sqlite3", dsn)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// return sqlDB, nil
+
+	return nil
+}
 
 // // format args placeholders in sql statment
 // func (*sqlite_engine) FormatSql(sql string) string {
@@ -52,14 +73,6 @@ type Engine struct {
 // // check if retry operation is practical for certain error type
 // func (*sqlite_engine) CanRetryErr(err error) bool {
 // 	return false
-// }
-
-// /////////////////////////////////////////////////////////
-
-// type sqlite_backend struct{}
-
-// func SqliteBackend() *sqlite_backend {
-// 	return &sqlite_backend{}
 // }
 
 // func (*sqlite_engine) CreateSchema(
@@ -139,46 +152,4 @@ type Engine struct {
 // 	result := []string{sql}
 // 	result = append(result, indexes...)
 // 	return result, nil
-// }
-
-// // interactive database configuration
-// func (*sqlite_backend) InteractiveConfig(opts Options) (Options, error) {
-// 	// con := xterm.NewConsole()
-
-// 	// if v, err := con.Required().ReadValue(
-// 	// 	"Enter database path",
-// 	// 	dictx.Fetch(opts, "database", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	dictx.Set(opts, "database", v)
-// 	// }
-
-// 	// if v, err := con.ReadValue(
-// 	// 	"Enter connection extra args",
-// 	// 	dictx.Fetch(opts, "extra_args", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	dictx.Set(opts, "extra_args", v)
-// 	// }
-
-// 	return opts, nil
-// }
-
-// // interactive database setup
-// func (*sqlite_backend) InteractiveSetup(opts Options) error {
-// 	// database := dictx.Fetch(opts, "database", "")
-// 	// if database == "" {
-// 	// 	return fmt.Errorf("%w - invalid database path", ErrOperation)
-// 	// }
-
-// 	// if _, err := os.Stat(database); os.IsNotExist(err) {
-// 	// 	syscall.Umask(0)
-// 	// 	f, err := os.OpenFile(
-// 	// 		database, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o664)
-// 	// 	if err != nil {
-// 	// 		return fmt.Errorf("%w - %s", ErrOperation, err.Error())
-// 	// 	}
-// 	// 	defer f.Close()
-// 	// }
-// 	return nil
 // }

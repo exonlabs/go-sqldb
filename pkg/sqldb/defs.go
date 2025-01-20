@@ -6,25 +6,13 @@ package sqldb
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
-	"github.com/exonlabs/go-utils/pkg/logging"
 )
-
-type Logger = logging.Logger
-type Options = dictx.Dict
 
 type Data = map[string]any
 type DataAdaptor = func(any) (any, error)
-
-type DbInfo struct {
-	Database string
-	Host     string
-	Port     int
-	Username string
-	Password string
-	Options  dictx.Dict
-}
 
 const (
 	BACKEND_NONE = int(iota)
@@ -50,9 +38,31 @@ func BACKEND(backend int) string {
 
 const SQL_PLACEHOLDER = "$?"
 
+type DBConfig struct {
+	Database string
+	Host     string
+	Port     int
+	Username string
+	Password string
+	Options  dictx.Dict
+}
+
+func (cfg *DBConfig) String() string {
+	pw := ""
+	if cfg.Password != "" {
+		pw = "*****"
+	}
+	return fmt.Sprintf(
+		"database: %s, host: %s, port: %d, username: %s, password: %s, options: %s",
+		cfg.Database, cfg.Host, cfg.Port, cfg.Username, pw, cfg.Options,
+	)
+}
+
 type Engine interface {
-	SqlDB() *sql.DB
 	Backend() int
+	Config() *DBConfig
+	SqlDB() *sql.DB
+
 	// FormatSql(string) string
 	// CanRetryErr(error) bool
 }

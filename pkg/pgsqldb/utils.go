@@ -5,85 +5,92 @@
 package pgsqldb
 
 import (
-	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/console"
 )
 
-func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
+func PrepareConfig(cfg *sqldb.DBConfig) error {
+	cfg.Database = strings.TrimSpace(cfg.Database)
+	cfg.Host = strings.TrimSpace(cfg.Host)
+	cfg.Username = strings.TrimSpace(cfg.Username)
+	cfg.Password = strings.TrimSpace(cfg.Password)
+
+	if cfg.Database == "" {
+		return sqldb.ErrDBName
+	}
+	if cfg.Host == "" {
+		return sqldb.ErrDBHost
+	}
+	if cfg.Port == 0 {
+		return sqldb.ErrDBPort
+	}
+	return nil
+}
+
+func InteractiveConfig(defaults dictx.Dict) (*sqldb.DBConfig, error) {
 	con, err := console.NewTermConsole()
 	if err != nil {
 		return nil, err
 	}
 	defer con.Close()
 
-	cfg := dictx.Dict{}
-
-	// set database name
-	if val, err := con.Required().ReadValue("Enter database name",
-		dictx.GetString(defaults, "database", "")); err != nil {
+	// get database name
+	db_name, err := con.Required().ReadValue("Enter database name",
+		dictx.GetString(defaults, "database", ""))
+	if err != nil {
 		return nil, err
-	} else {
-		dictx.Set(cfg, "database", val)
 	}
 
-	// set database host
-	if val, err := con.Required().ReadValue("Enter database host",
-		dictx.GetString(defaults, "host", "localhost")); err != nil {
+	// get database host
+	db_host, err := con.Required().ReadValue("Enter database host",
+		dictx.GetString(defaults, "host", "localhost"))
+	if err != nil {
 		return nil, err
-	} else {
-		dictx.Set(cfg, "host", val)
 	}
 
-	// set database port
-	if val, err := con.Required().ReadNumber("Enter database port",
-		int64(dictx.GetInt(defaults, "port", 5432))); err != nil {
+	// get database port
+	db_port, err := con.Required().ReadNumber("Enter database port",
+		int64(dictx.GetUint(defaults, "port", 5432)))
+	if err != nil {
 		return nil, err
-	} else {
-		dictx.Set(cfg, "port", val)
 	}
 
-	// set database username
-	if val, err := con.ReadValue("Enter database username",
-		dictx.GetString(defaults, "username", "")); err != nil {
+	// get database username
+	db_user, err := con.ReadValue("Enter database username",
+		dictx.GetString(defaults, "username", ""))
+	if err != nil {
 		return nil, err
-	} else {
-		dictx.Set(cfg, "username", val)
 	}
 
-	// set database password
-	if val, err := con.Hidden().ReadValue("Enter database password",
-		dictx.GetString(defaults, "password", "")); err != nil {
+	// get database password
+	db_pass, err := con.Hidden().ReadValue("Enter database password",
+		dictx.GetString(defaults, "password", ""))
+	if err != nil {
 		return nil, err
-	} else if val != "" {
+	} else if db_pass != "" {
 		if err = con.Hidden().ConfirmValue(
-			"Confirm database password", val); err != nil {
+			"Confirm database password", db_pass); err != nil {
 			return nil, err
 		}
-		dictx.Set(cfg, "password", val)
 	}
 
-	return cfg, nil
+	return &sqldb.DBConfig{
+		Database: db_name,
+		Host:     db_host,
+		Port:     int(db_port),
+		Username: db_user,
+		Password: db_pass,
+	}, nil
 }
 
-func InteractiveSetup(cfg dictx.Dict) error {
-	// check required params
-	db_name := dictx.GetString(cfg, "database", "")
-	if db_name == "" {
-		return errors.New("empty database name")
+func InteractiveSetup(cfg *sqldb.DBConfig) error {
+	if err := PrepareConfig(cfg); err != nil {
+		return err
 	}
-	db_host := dictx.GetString(cfg, "host", "")
-	if db_host == "" {
-		return errors.New("empty database host")
-	}
-	db_port := dictx.GetUint(cfg, "port", 0)
-	if db_port == 0 {
-		return errors.New("empty database port")
-	}
-	db_user := dictx.GetString(cfg, "username", "")
-	db_pass := dictx.GetString(cfg, "password", "")
 
 	con, err := console.NewTermConsole()
 	if err != nil {
@@ -107,12 +114,7 @@ func InteractiveSetup(cfg dictx.Dict) error {
 	// DATABASE SETUP
 
 	fmt.Println()
-	fmt.Printf("database name: %s\n", db_name)
-	fmt.Printf("database host: %s\n", db_host)
-	fmt.Printf("database port: %d\n", db_port)
-	fmt.Printf("database user: %s\n", db_user)
-	fmt.Printf("database pass: %s\n", db_pass)
-	fmt.Println()
+	fmt.Printf("database config:\n%s\n\n", cfg)
 	fmt.Printf("admin user: %s\n", adm_user)
 	fmt.Printf("admin pass: %s\n", adm_pass)
 

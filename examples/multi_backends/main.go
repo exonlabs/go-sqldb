@@ -255,11 +255,13 @@ func main() {
 		log.Error("create engine failed - %s", err.Error())
 		return
 	}
-	dbh := sqldb.NewHandler(engine, log, cfg)
 
-	if err := run_operations(dbh); err != nil {
-		log.Info("Error: %s\n", err.Error())
-		return
-	}
+	fmt.Println(engine.Config())
+	// dbh := sqldb.NewHandler(engine, log, cfg)
+
+	// if err := run_operations(dbh); err != nil {
+	// 	log.Info("Error: %s\n", err.Error())
+	// 	return
+	// }
 
 }

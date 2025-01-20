@@ -4,25 +4,30 @@
 
 package sqldb
 
+import (
+	"github.com/exonlabs/go-utils/pkg/abc/dictx"
+	"github.com/exonlabs/go-utils/pkg/logging"
+)
+
 // const (
 // 	defaultConnectTimeout = float64(5)
 // 	defaultRetryInterval  = float64(0.2)
 // )
 
 type Handler struct {
-	log *Logger
+	log *logging.Logger
 
 	// database backend engine handler
 	engine Engine
 
 	// database connection params
-	DbInfo *DbInfo
+	DbInfo *DBConfig
 	// // session connection params
 	// ConnectTimeout float64
 	// RetryInterval  float64
 }
 
-func NewHandler(dbe Engine, log *Logger, opts Options) *Handler {
+func NewHandler(dbe Engine, log *logging.Logger, opts dictx.Dict) *Handler {
 	h := &Handler{
 		log:    log,
 		engine: dbe,

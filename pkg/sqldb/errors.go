@@ -19,6 +19,14 @@ var (
 	ErrDBSession = fmt.Errorf("%winvalid database session", ErrError)
 	// ErrDBBackend indicates an invalid or not defined database backend.
 	ErrDBBackend = fmt.Errorf("%winvalid database backend", ErrError)
+	// ErrDBPath indicates an invalid or not defined database path.
+	ErrDBPath = fmt.Errorf("%winvalid database path", ErrError)
+	// ErrDBName indicates an invalid or not defined database name.
+	ErrDBName = fmt.Errorf("%winvalid database name", ErrError)
+	// ErrDBHost indicates an invalid or not defined database host.
+	ErrDBHost = fmt.Errorf("%winvalid database host", ErrError)
+	// ErrDBPort indicates an invalid or not defined database port number.
+	ErrDBPort = fmt.Errorf("%winvalid database port", ErrError)
 
 	// ErrConnect indicates the connection to database failed.
 	ErrConnect = fmt.Errorf("%wconnection failed", ErrError)

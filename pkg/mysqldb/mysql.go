@@ -4,96 +4,37 @@
 
 package mysqldb
 
-// type mysql_engine struct {
-// 	Database  string
-// 	Host      string
-// 	Port      int
-// 	Username  string
-// 	Password  string
-// 	ExtraArgs string
-// }
+import (
+	"database/sql"
 
-// func MysqlEngine(opts Options) *mysql_engine {
-// 	return &mysql_engine{}
-// }
+	"github.com/exonlabs/go-sqldb/pkg/sqldb"
+)
 
-// func (dbe *mysql_engine) BackendName() string {
-// 	return MYSQL_BACKEND
-// }
+type Engine struct {
+	sqlDB *sql.DB
 
-// func (dbe *mysql_engine) GenSchema(
-// 	tblname string, model Model) ([]string, error) {
+	// database config
+	config *sqldb.DBConfig
+}
 
-// 	return []string{}, nil
-// }
+func NewEngine(cfg *sqldb.DBConfig) (*Engine, error) {
+	if err := PrepareConfig(cfg); err != nil {
+		return nil, err
+	}
 
-// /////////////////////////////////////////////////////////
+	return &Engine{
+		config: cfg,
+	}, nil
+}
 
-// type mysql_backend struct{}
+func (dbe *Engine) Backend() int {
+	return sqldb.BACKEND_SQLITE
+}
 
-// func MysqlBackend() *mysql_backend { return &mysql_backend{} }
+func (dbe *Engine) Config() *sqldb.DBConfig {
+	return dbe.config
+}
 
-// // interactive database configuration
-// func (*mysql_backend) InteractiveConfig(opts Options) (Options, error) {
-// 	// con := xterm.NewConsole()
-
-// 	// if v, err := con.Required().ReadValue(
-// 	// 	"Enter database name",
-// 	// 	opts.GetString("database", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	opts.Set("database", v)
-// 	// }
-
-// 	// if v, err := con.Required().ReadValue(
-// 	// 	"Enter database host IP/FQDN",
-// 	// 	opts.GetString("host", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	opts.Set("host", v)
-// 	// }
-
-// 	// if v, err := con.Required().ReadNumberWLimit(
-// 	// 	"Enter database port number",
-// 	// 	opts.GetInt("port", 0), 0, 65536); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	opts.Set("port", v)
-// 	// }
-
-// 	// if v, err := con.ReadValue(
-// 	// 	"Enter database access username",
-// 	// 	opts.GetString("username", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	opts.Set("username", v)
-// 	// }
-
-// 	// if v, err := con.Hidden().ReadValue(
-// 	// 	"Enter database access password",
-// 	// 	opts.GetString("password", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	opts.Set("password", v)
-// 	// }
-
-// 	// if v, err := con.ReadValue(
-// 	// 	"Enter connection extra args",
-// 	// 	opts.GetString("extra_args", "")); err != nil {
-// 	// 	return nil, err
-// 	// } else {
-// 	// 	opts.Set("extra_args", v)
-// 	// }
-
-// 	return opts, nil
-// }
-
-// // interactive database setup
-// func (*mysql_backend) InteractiveSetup(opts Options) error {
-
-// 	///////////////////////////
-// 	// TODO
-// 	//////////////////////////
-
-// 	return nil
-// }
+func (dbe *Engine) SqlDB() *sql.DB {
+	return dbe.sqlDB
+}

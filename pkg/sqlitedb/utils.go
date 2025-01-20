@@ -5,45 +5,51 @@
 package sqlitedb
 
 import (
-	"errors"
 	"os"
 	"strings"
 
+	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/abc/fsx"
 	"github.com/exonlabs/go-utils/pkg/console"
 )
 
-func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
+func PrepareConfig(cfg *sqldb.DBConfig) error {
+	cfg.Database = strings.TrimSpace(cfg.Database)
+
+	if cfg.Database == "" {
+		return sqldb.ErrDBPath
+	}
+	return nil
+}
+
+func InteractiveConfig(defaults dictx.Dict) (*sqldb.DBConfig, error) {
 	con, err := console.NewTermConsole()
 	if err != nil {
 		return nil, err
 	}
 	defer con.Close()
 
-	cfg := dictx.Dict{}
-
-	// set database path
-	if val, err := con.Required().ReadValue("Enter database path",
-		dictx.Fetch(defaults, "database", "")); err != nil {
+	// get database path
+	db_path, err := con.Required().ReadValue("Enter database path",
+		dictx.GetString(defaults, "database", ""))
+	if err != nil {
 		return nil, err
-	} else {
-		dictx.Set(cfg, "database", val)
 	}
 
-	return cfg, nil
+	return &sqldb.DBConfig{
+		Database: db_path,
+	}, nil
 }
 
-func InteractiveSetup(cfg dictx.Dict) error {
-	// check required params
-	db_path := strings.TrimSpace(dictx.Fetch(cfg, "database", ""))
-	if db_path == "" {
-		return errors.New("empty database path")
+func InteractiveSetup(cfg *sqldb.DBConfig) error {
+	if err := PrepareConfig(cfg); err != nil {
+		return err
 	}
 
-	if !fsx.IsExist(db_path) {
+	if !fsx.IsExist(cfg.Database) {
 		file, err := os.OpenFile(
-			db_path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0664)
+			cfg.Database, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o664)
 		if err != nil {
 			return err
 		}
