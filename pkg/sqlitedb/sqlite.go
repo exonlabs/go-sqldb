@@ -16,10 +16,10 @@ type Engine struct {
 	sqlDB *sql.DB
 
 	// database config
-	config *sqldb.DBConfig
+	config *sqldb.Config
 }
 
-func NewEngine(cfg *sqldb.DBConfig) (*Engine, error) {
+func NewEngine(cfg *sqldb.Config) (*Engine, error) {
 	if err := PrepareConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -31,10 +31,6 @@ func NewEngine(cfg *sqldb.DBConfig) (*Engine, error) {
 
 func (dbe *Engine) Backend() int {
 	return sqldb.BACKEND_SQLITE
-}
-
-func (dbe *Engine) Config() *sqldb.DBConfig {
-	return dbe.config
 }
 
 func (dbe *Engine) SqlDB() *sql.DB {

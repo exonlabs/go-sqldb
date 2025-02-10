@@ -11,8 +11,17 @@ import (
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 )
 
-type Data = map[string]any
+type Data = dictx.Dict
 type DataAdaptor = func(any) (any, error)
+
+// const SQL_PLACEHOLDER = "$?"
+
+// const (
+// 	// CONNECT_TIMEOUT defines the default timeout for connect in seconds.
+// 	CONNECT_TIMEOUT = float64(5)
+// 	// RETRY_INTERVAL defines the number of connection retries.
+// 	RETRY_INTERVAL = int(3)
+// )
 
 const (
 	BACKEND_NONE = int(iota)
@@ -36,31 +45,39 @@ func BACKEND(backend int) string {
 	return ""
 }
 
-const SQL_PLACEHOLDER = "$?"
-
-type DBConfig struct {
+type Config struct {
+	// database name or path
 	Database string
-	Host     string
-	Port     int
+	// database server host and port
+	Host string
+	Port int
+	// database access username and password
 	Username string
 	Password string
-	Options  dictx.Dict
+	// extra backend or specific options
+	Options dictx.Dict
 }
 
-func (cfg *DBConfig) String() string {
-	pw := ""
-	if cfg.Password != "" {
-		pw = "*****"
+func (cfg *Config) String() string {
+	s := fmt.Sprintf("Database: %s", cfg.Database)
+	if cfg.Host != "" {
+		s += fmt.Sprintf(", Host: %s, Port: %d", cfg.Host, cfg.Port)
 	}
-	return fmt.Sprintf(
-		"database: %s, host: %s, port: %d, username: %s, password: %s, options: %s",
-		cfg.Database, cfg.Host, cfg.Port, cfg.Username, pw, cfg.Options,
-	)
+	if cfg.Username != "" || cfg.Password != "" {
+		pw := ""
+		if cfg.Password != "" {
+			pw = "*****"
+		}
+		s += fmt.Sprintf(", Username: %s, Password: %s", cfg.Username, pw)
+	}
+	if cfg.Options != nil {
+		s += fmt.Sprintf(", Options: %s", dictx.String(cfg.Options))
+	}
+	return "{" + s + "}"
 }
 
 type Engine interface {
 	Backend() int
-	Config() *DBConfig
 	SqlDB() *sql.DB
 
 	// FormatSql(string) string

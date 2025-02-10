@@ -21,13 +21,14 @@ type Handler struct {
 	engine Engine
 
 	// database connection params
-	DbInfo *DBConfig
+	DbInfo *Config
+
 	// // session connection params
 	// ConnectTimeout float64
 	// RetryInterval  float64
 }
 
-func NewHandler(dbe Engine, log *logging.Logger, opts dictx.Dict) *Handler {
+func NewHandler(dbe Engine, opts dictx.Dict, log *logging.Logger) *Handler {
 	h := &Handler{
 		log:    log,
 		engine: dbe,

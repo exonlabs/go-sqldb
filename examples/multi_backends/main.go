@@ -7,13 +7,27 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
-	"slices"
 	"strings"
 
+	"github.com/exonlabs/go-sqldb/pkg/mssqldb"
+	"github.com/exonlabs/go-sqldb/pkg/mysqldb"
+	"github.com/exonlabs/go-sqldb/pkg/pgsqldb"
 	"github.com/exonlabs/go-sqldb/pkg/sqldb"
-	"github.com/exonlabs/go-sqldb/pkg/sqldbutils"
+	"github.com/exonlabs/go-sqldb/pkg/sqlitedb"
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/logging"
+)
+
+var (
+	db_name   = "test"
+	db_config = dictx.Dict{
+		"database": db_name,
+		// "host":     "localhost",
+		// "port":     0,
+		// "username": "",
+		// "password": "",
+		// "options":  dictx.Dict{},
+	}
 )
 
 //////////////////////////////// models
@@ -165,9 +179,6 @@ func main() {
 			log.Panic("%s", r)
 			log.Trace1("\n----------\n%s----------", stack[indx:])
 			os.Exit(1)
-		} else {
-			log.Info("exit")
-			os.Exit(0)
 		}
 	}()
 
@@ -184,7 +195,7 @@ func main() {
 	debug3 := flag.Bool("xxxx", false, "enable debug and trace3 logs")
 	backend := flag.String("backend", "",
 		fmt.Sprintf("select backend {%s}", strings.Join(backends, "|")))
-	setup := flag.Bool("setup", false, "perform database setup")
+	// setup := flag.Bool("setup", false, "perform database setup")
 	flag.Parse()
 
 	switch {
@@ -198,26 +209,42 @@ func main() {
 		log.Level = logging.DEBUG
 	}
 
-	// selecting backend
-	if *backend == "" || !slices.Contains(backends, *backend) {
-		fmt.Printf("Error: invalid backend '%s'\n\n", *backend)
-		return
-	}
+	var err error
+	var db_backend int
 
-	database := "test"
-	if *backend == sqldb.BACKEND(sqldb.BACKEND_SQLITE) {
-		database = filepath.Join(os.TempDir(), database+".db")
+	// selecting backend
+	switch *backend {
+	case sqldb.BACKEND(sqldb.BACKEND_SQLITE):
+		db_backend = sqldb.BACKEND_SQLITE
+		dictx.Set(db_config, "database",
+			filepath.Join(os.TempDir(), db_name+".db"))
+	case sqldb.BACKEND(sqldb.BACKEND_MYSQL):
+		db_backend = sqldb.BACKEND_MYSQL
+	case sqldb.BACKEND(sqldb.BACKEND_PGSQL):
+		db_backend = sqldb.BACKEND_PGSQL
+	case sqldb.BACKEND(sqldb.BACKEND_MSSQL):
+		db_backend = sqldb.BACKEND_MSSQL
+	default:
+		fmt.Printf("Error: invalid backend '%s'\n", *backend)
+		return
 	}
 
 	log.Info("**** starting ****")
 
-	log.Info("Using backend: %s", *backend)
-	fmt.Println()
+	log.Info("Using Backend: %s", sqldb.BACKEND(db_backend))
 
 	// setting backend config
-	fmt.Println("* Configure database:")
-	cfg, err := sqldbutils.InteractiveConfig(
-		*backend, dictx.Dict{"database": database})
+	fmt.Println("\n* Configure database:")
+	switch db_backend {
+	case sqldb.BACKEND_SQLITE:
+		db_config, err = sqlitedb.InteractiveConfig(db_config)
+	case sqldb.BACKEND_MYSQL:
+		db_config, err = mysqldb.InteractiveConfig(db_config)
+	case sqldb.BACKEND_PGSQL:
+		db_config, err = pgsqldb.InteractiveConfig(db_config)
+	case sqldb.BACKEND_MSSQL:
+		db_config, err = mssqldb.InteractiveConfig(db_config)
+	}
 	if err != nil {
 		if !strings.Contains(err.Error(), "EOF") {
 			fmt.Printf("Error: %s\n", err.Error())
@@ -227,36 +254,31 @@ func main() {
 	}
 	fmt.Println()
 
-	log.Info("Database Options:")
-	for _, k := range []string{
-		"database", "host", "port", "username", "password"} {
-		if dictx.IsExist(cfg, k) {
-			log.Info(" - %-8v :  %v", k, dictx.Get(cfg, k, nil))
-		}
-	}
+	log.Info("Using Options:")
+	log.Info("%s", db_config)
 	fmt.Println()
 
-	// setup database
-	if *setup {
-		fmt.Println("* Setup database:")
-		err := sqldbutils.InteractiveSetup(*backend, cfg)
-		if err != nil {
-			if !strings.Contains(err.Error(), "EOF") {
-				fmt.Printf("Error: %s\n", err.Error())
-			}
-		}
-		fmt.Println()
-		return
-	}
+	// // setup database
+	// if *setup {
+	// 	fmt.Println("* Setup database:")
+	// 	err := sqldbutils.InteractiveSetup(db_backend, cfg)
+	// 	if err != nil {
+	// 		if !strings.Contains(err.Error(), "EOF") {
+	// 			fmt.Printf("Error: %s\n", err.Error())
+	// 		}
+	// 	}
+	// 	fmt.Println()
+	// 	return
+	// }
 
-	// select engine and create db handler
-	engine, err := sqldbutils.CreateEngine(*backend, cfg)
-	if err != nil {
-		log.Error("create engine failed - %s", err.Error())
-		return
-	}
+	// // select engine and create db handler
+	// engine, err := sqldbutils.CreateEngine(*backend, cfg)
+	// if err != nil {
+	// 	log.Error("create engine failed - %s", err.Error())
+	// 	return
+	// }
 
-	fmt.Println(engine.Config())
+	// fmt.Println(engine.Config())
 	// dbh := sqldb.NewHandler(engine, log, cfg)
 
 	// if err := run_operations(dbh); err != nil {
@@ -264,4 +286,5 @@ func main() {
 	// 	return
 	// }
 
+	log.Info("exit")
 }

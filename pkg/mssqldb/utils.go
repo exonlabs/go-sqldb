@@ -8,30 +8,33 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/console"
+
+	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 )
 
-func PrepareConfig(cfg *sqldb.DBConfig) error {
-	cfg.Database = strings.TrimSpace(cfg.Database)
-	cfg.Host = strings.TrimSpace(cfg.Host)
-	cfg.Username = strings.TrimSpace(cfg.Username)
-	cfg.Password = strings.TrimSpace(cfg.Password)
+func PrepareConfig(cfg dictx.Dict) error {
+	for _, k := range []string{"database", "host", "username", "password"} {
+		if dictx.IsExist(cfg, k) {
+			s := strings.TrimSpace(dictx.GetString(cfg, k, ""))
+			dictx.Set(cfg, k, s)
+		}
+	}
 
-	if cfg.Database == "" {
+	if dictx.GetString(cfg, "database", "") == "" {
 		return sqldb.ErrDBName
 	}
-	if cfg.Host == "" {
+	if dictx.GetString(cfg, "host", "") == "" {
 		return sqldb.ErrDBHost
 	}
-	if cfg.Port == 0 {
+	if dictx.GetInt(cfg, "port", 0) == 0 {
 		return sqldb.ErrDBPort
 	}
 	return nil
 }
 
-func InteractiveConfig(defaults dictx.Dict) (*sqldb.DBConfig, error) {
+func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
 	con, err := console.NewTermConsole()
 	if err != nil {
 		return nil, err
@@ -78,16 +81,22 @@ func InteractiveConfig(defaults dictx.Dict) (*sqldb.DBConfig, error) {
 		}
 	}
 
-	return &sqldb.DBConfig{
-		Database: db_name,
-		Host:     db_host,
-		Port:     int(db_port),
-		Username: db_user,
-		Password: db_pass,
-	}, nil
+	cfg, err := dictx.Clone(defaults)
+	if err != nil {
+		return nil, err
+	}
+	dictx.Merge(cfg, dictx.Dict{
+		"database": db_name,
+		"host":     db_host,
+		"port":     int(db_port),
+		"username": db_user,
+		"password": db_pass,
+	})
+
+	return cfg, nil
 }
 
-func InteractiveSetup(cfg *sqldb.DBConfig) error {
+func InteractiveSetup(cfg dictx.Dict) error {
 	if err := PrepareConfig(cfg); err != nil {
 		return err
 	}
@@ -113,8 +122,7 @@ func InteractiveSetup(cfg *sqldb.DBConfig) error {
 	// TODO:
 	// DATABASE SETUP
 
-	fmt.Println()
-	fmt.Printf("database config:\n%s\n\n", cfg)
+	fmt.Println("database setup:")
 	fmt.Printf("admin user: %s\n", adm_user)
 	fmt.Printf("admin pass: %s\n", adm_pass)
 

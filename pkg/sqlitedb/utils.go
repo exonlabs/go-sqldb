@@ -8,22 +8,28 @@ import (
 	"os"
 	"strings"
 
-	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/abc/fsx"
 	"github.com/exonlabs/go-utils/pkg/console"
+
+	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 )
 
-func PrepareConfig(cfg *sqldb.DBConfig) error {
-	cfg.Database = strings.TrimSpace(cfg.Database)
+func PrepareConfig(cfg dictx.Dict) error {
+	for _, k := range []string{"database"} {
+		if dictx.IsExist(cfg, k) {
+			s := strings.TrimSpace(dictx.GetString(cfg, k, ""))
+			dictx.Set(cfg, k, s)
+		}
+	}
 
-	if cfg.Database == "" {
+	if dictx.GetString(cfg, "database", "") == "" {
 		return sqldb.ErrDBPath
 	}
 	return nil
 }
 
-func InteractiveConfig(defaults dictx.Dict) (*sqldb.DBConfig, error) {
+func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
 	con, err := console.NewTermConsole()
 	if err != nil {
 		return nil, err
@@ -37,19 +43,25 @@ func InteractiveConfig(defaults dictx.Dict) (*sqldb.DBConfig, error) {
 		return nil, err
 	}
 
-	return &sqldb.DBConfig{
-		Database: db_path,
-	}, nil
+	cfg, err := dictx.Clone(defaults)
+	if err != nil {
+		return nil, err
+	}
+	dictx.Merge(cfg, dictx.Dict{
+		"database": db_path,
+	})
+
+	return cfg, nil
 }
 
-func InteractiveSetup(cfg *sqldb.DBConfig) error {
+func InteractiveSetup(cfg dictx.Dict) error {
 	if err := PrepareConfig(cfg); err != nil {
 		return err
 	}
 
-	if !fsx.IsExist(cfg.Database) {
-		file, err := os.OpenFile(
-			cfg.Database, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o664)
+	dp_path := dictx.GetString(cfg, "database", "")
+	if !fsx.IsExist(dp_path) {
+		file, err := os.OpenFile(dp_path, os.O_CREATE|os.O_WRONLY, 0o664)
 		if err != nil {
 			return err
 		}
