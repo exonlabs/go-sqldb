@@ -8,17 +8,19 @@ import (
 	"database/sql"
 
 	"github.com/exonlabs/go-sqldb/pkg/sqldb"
+	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 )
 
 type Engine struct {
-	sqlDB *sql.DB
-
 	// database config
 	config *sqldb.Config
+
+	sqlDB *sql.DB
 }
 
-func NewEngine(cfg *sqldb.Config) (*Engine, error) {
-	if err := PrepareConfig(cfg); err != nil {
+func NewEngine(config dictx.Dict) (*Engine, error) {
+	cfg, err := GetConfig(config)
+	if err != nil {
 		return nil, err
 	}
 
@@ -27,14 +29,19 @@ func NewEngine(cfg *sqldb.Config) (*Engine, error) {
 	}, nil
 }
 
-func (dbe *Engine) Backend() int {
+func (dbe *Engine) Backend() sqldb.Backend {
 	return sqldb.BACKEND_SQLITE
 }
 
-func (dbe *Engine) Config() *sqldb.Config {
-	return dbe.config
+func (e *Engine) Config() *sqldb.Config {
+	return e.config
 }
 
-func (dbe *Engine) SqlDB() *sql.DB {
-	return dbe.sqlDB
+func (e *Engine) SqlDB() *sql.DB {
+	return e.sqlDB
+}
+
+// GenSchema generates table schema.
+func (*Engine) GenSchema(tablename string, meta *sqldb.TableMeta) string {
+	return ""
 }

@@ -4,111 +4,135 @@
 
 package sqldb
 
-// type TableMeta = struct {
-// 	// custom options for special database uses
-// 	Options Options
+import (
+	"github.com/exonlabs/go-utils/pkg/abc/dictx"
+)
 
-// 	// Table column definitions
-// 	//	https://www.w3schools.com/sql/sql_create_table.asp
-// 	// 	https://www.w3schools.com/sql/sql_datatypes.asp
-// 	//
-// 	// 	{column_name, datatype [, constraint]}
-// 	//	constraint: is optional space seperated mix of {PRIMARY|UNIQUE|INDEX}.
-// 	//	constraints can be added per column or globaly per table.
-// 	//
-// 	// Example:
-// 	//
-// 	//	{"col1", "VARCHAR(128) NOT NULL", "UNIQUE INDEX"}
-// 	//	{"col2", "INTEGER", "INDEX"}
-// 	//	{"col3", "TEXT"}
-// 	//	{"col4", "BOOLEAN NOT NULL DEFAULT 0"}
-// 	Columns [][]string
+// ColumnMeta defines strcture holding column definitions and constraints.
+//
+// References:
+//   - https://www.w3schools.com/sql/sql_create_table.asp
+//   - https://www.w3schools.com/sql/sql_datatypes.asp
+type ColumnMeta struct {
+	// the column name, should be unique per table.
+	Name string
+	// the column data type as defined in SQL syntax.
+	// ex. "INTEGER(10)", "VARCHAR(128) NOT NULL", "BOOLEAN NOT NULL DEFAULT 0"
+	Type string
+	// set column primary key constraint.
+	Primary bool
+	// set column unique value constraint.
+	Unique bool
+	// set to create column index.
+	Index bool
+}
 
-// 	// Table constraints definitions
-// 	// 	https://www.w3schools.com/sql/sql_constraints.asp
-// 	//
-// 	// Example:
-// 	//
-// 	//	`PRIMARY KEY (col1)`
-// 	//	`FOREIGN KEY (col1) REFERENCES table1 (col2) ON UPDATE CASCADE`
-// 	//	`UNIQUE (col1,col2)`
-// 	//	`CHECK (col1>=10 AND col2="val")`
-// 	//
-// 	// with Naming (for ALTER modifications):
-// 	//
-// 	//	`CONSTRAINT pk_name PRIMARY KEY (col1,col2)`
-// 	//	`CONSTRAINT uc_name UNIQUE (col1)`
-// 	//	`CONSTRAINT ck_name CHECK (col1 IN (0,1,2))`
-// 	Constraints []string
-// }
+// ConstraintMeta defines strcture holding constraints definitions.
+//
+// References:
+//   - https://www.w3schools.com/sql/sql_constraints.asp
+type ConstraintMeta struct {
+	// the constraint name, should be unique per table.
+	Name string
+	// the constraint definition as defined in SQL syntax.
+	// ex. "PRIMARY KEY (col1,col2)"
+	//     "FOREIGN KEY (col1) REFERENCES table1 (col2) ON UPDATE CASCADE"
+	//     "UNIQUE (col1,col2)"
+	//     "CHECK (col1 IN (0,1,2))"
+	//     "CHECK (col1>=10 AND col2="val")"
+	Definition string
+}
 
-// type Model interface {
-// 	TableName() string
-// 	TableMeta() *TableMeta
-// }
-// type ModelAutoGuid interface{ AutoGuid() bool }
-// type ModelDefaultOrders interface{ DefaultOrders() []string }
-// type ModelDataReaders interface{ DataReaders() map[string]DataAdaptor }
-// type ModelDataWriters interface{ DataWriters() map[string]DataAdaptor }
-// type ModelAlterSchema interface{ AlterSchema(*Handler, string) error }
-// type ModelInitialData interface{ InitialData(*Handler, string) error }
+// TableMeta defines strcture holding table definitions and constraints.
+//
+// References:
+//   - https://www.w3schools.com/sql/sql_create_table.asp
+//   - https://www.w3schools.com/sql/sql_datatypes.asp
+//   - https://www.w3schools.com/sql/sql_constraints.asp
+type TableMeta struct {
+	// Table Columns meta
+	Columns []ColumnMeta
+	// Table Constraints as defined in SQL syntax. constraints are appended to
+	// table after auto generated columns constraints.
+	Constraints []ConstraintMeta
+	// AutoGuid sets weather to create a guid primary column for table.
+	// guid column is created with name "guid" and type "VARCHAR(32) NOT NULL"
+	AutoGuid bool
+	// Extra options for specific backends. each option is prefixed with the
+	// backend name plus underscore. ex: "sqlite_<OPTION_NAME>"
+	Args dictx.Dict
+}
 
-// func (dbh *Handler) CreateSchema(models map[string]Model) error {
-// 	schema_sql := []string{}
-// 	for tblname, model := range models {
-// 		sql, err := dbh.engine.GenSchema(tblname, model)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		schema_sql = append(schema_sql, sql...)
-// 		dbh.Logger.Trace2("table '%s' schema:\n%s",
-// 			tblname, strings.Join(sql, "\n"))
-// 	}
+// Model represents the model interface.
+type Model interface {
+	TableName() string
+	Columns() []string
+	Orders() []string
+	IsAutoGuid() bool
+	DataReaders() map[string]DataAdaptor
+	DataWriters() map[string]DataAdaptor
+}
 
-// 	dbs := dbh.Session()
-// 	defer dbs.Close()
+type BaseModel struct {
+	DefaultTable   string
+	DefaultColumns []string
+	DefaultOrders  []string
+	AutoGuid       bool
+	Readers        map[string]DataAdaptor
+	Writers        map[string]DataAdaptor
+}
 
-// 	// create schema in session transaction
-// 	if err := dbs.Begin(); err != nil {
-// 		return err
-// 	}
-// 	// create tables schema
-// 	for _, sql := range schema_sql {
-// 		if _, err := dbs.Execute(sql); err != nil {
-// 			return err
-// 		}
-// 	}
-// 	// run tables schema upgrades
-// 	for tblname, model := range models {
-// 		if mdl, ok := model.(ModelUpgradeSchema); ok {
-// 			if err := mdl.UpgradeSchema(dbs, tblname); err != nil {
-// 				return err
-// 			}
-// 		}
-// 	}
-// 	if err := dbs.Commit(); err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
+func (m *BaseModel) TableName() string {
+	return m.DefaultTable
+}
 
-// func (dbh *Handler) InitializeData(models map[string]Model) error {
-// 	dbs := dbh.Session()
-// 	defer dbs.Close()
+func (m *BaseModel) Columns() []string {
+	return m.DefaultColumns
+}
 
-// 	// initialze data in session transaction
-// 	if err := dbs.Begin(); err != nil {
-// 		return err
-// 	}
-// 	for tblname, model := range models {
-// 		if mdl, ok := model.(ModelInitializeData); ok {
-// 			if err := mdl.InitializeData(dbs, tblname); err != nil {
-// 				return err
-// 			}
-// 		}
-// 	}
-// 	if err := dbs.Commit(); err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
+func (m *BaseModel) Orders() []string {
+	return m.DefaultOrders
+}
+
+func (m *BaseModel) IsAutoGuid() bool {
+	return m.AutoGuid
+}
+
+func (m *BaseModel) DataReaders() map[string]DataAdaptor {
+	return nil
+}
+
+func (m *BaseModel) DataWriters() map[string]DataAdaptor {
+	return nil
+}
+
+// ModelMeta represents the model metainfo interface.
+type ModelMeta interface {
+	CreateSchema(s *Session, tablename string) error
+	AlterSchema(s *Session, tablename string) error
+	InitialData(s *Session, tablename string) error
+}
+
+type BaseModelMeta TableMeta
+
+func (m *BaseModelMeta) CreateSchema(s *Session, tablename string) error {
+	if s.db.engine == nil {
+		return ErrDBEngine
+	}
+
+	if s.db.DBLog != nil {
+		s.db.DBLog.Debug("creating schema for table: %s", tablename)
+	}
+	schema := s.db.engine.GenSchema(tablename, (*TableMeta)(m))
+
+	_, err := s.Execute(schema)
+	return err
+}
+
+func (m *BaseModelMeta) AlterSchema(s *Session, tablename string) error {
+	return nil
+}
+
+func (m *BaseModelMeta) InitialData(s *Session, tablename string) error {
+	return nil
+}

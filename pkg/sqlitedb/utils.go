@@ -6,7 +6,6 @@ package sqlitedb
 
 import (
 	"os"
-	"strings"
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/abc/fsx"
@@ -15,20 +14,24 @@ import (
 	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 )
 
-func PrepareConfig(cfg dictx.Dict) error {
-	for _, k := range []string{"database"} {
-		if dictx.IsExist(cfg, k) {
-			s := strings.TrimSpace(dictx.GetString(cfg, k, ""))
-			dictx.Set(cfg, k, s)
-		}
+// GetConfig creates configuration object from configuration dict.
+// it checks and returns error if not all options have valid values.
+//
+// The parsed config options are:
+//   - database: (string) the database file path - REQUIRED
+func GetConfig(config dictx.Dict) (*sqldb.Config, error) {
+	cfg := sqldb.NewConfig(config)
+
+	// validations
+	if cfg.Database == "" {
+		return nil, sqldb.ErrDBPath
 	}
 
-	if dictx.GetString(cfg, "database", "") == "" {
-		return sqldb.ErrDBPath
-	}
-	return nil
+	return cfg, nil
 }
 
+// InteractiveConfig gets the database configuration interactively from console.
+// The database default options are detailed in [GetConfig]
 func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
 	con, err := console.NewTermConsole()
 	if err != nil {
@@ -54,14 +57,17 @@ func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
 	return cfg, nil
 }
 
-func InteractiveSetup(cfg dictx.Dict) error {
-	if err := PrepareConfig(cfg); err != nil {
+// InteractiveSetup performs an interactive console based database setup.
+// The database config options are detailed in [GetConfig]
+func InteractiveSetup(config dictx.Dict) error {
+	cfg, err := GetConfig(config)
+	if err != nil {
 		return err
 	}
 
-	dp_path := dictx.GetString(cfg, "database", "")
-	if !fsx.IsExist(dp_path) {
-		file, err := os.OpenFile(dp_path, os.O_CREATE|os.O_WRONLY, 0o664)
+	// create database file if not exist
+	if !fsx.IsExist(cfg.Database) {
+		file, err := os.OpenFile(cfg.Database, os.O_CREATE|os.O_WRONLY, 0o664)
 		if err != nil {
 			return err
 		}

@@ -6,85 +6,147 @@ package sqldb
 
 import (
 	"database/sql"
-	"sync"
+	"fmt"
 )
 
+// Session represents the database session object.
 type Session struct {
 	// parent database handler
-	handler *Handler
-
+	db *Database
 	// sql transactioin handler
 	sqlTX *sql.Tx
-
-	// operations sync mutex
-	mu sync.Mutex
 }
 
-func newSession(dbh *Handler) *Session {
-	return &Session{
-		handler: dbh,
+// creates new database session object
+func newSession(db *Database) (*Session, error) {
+	if db.DBLog != nil {
+		db.DBLog.Debug("new session")
 	}
+	return &Session{
+		db: db,
+	}, nil
 }
 
-func (dbs *Session) IsActive() bool {
-	dbs.mu.Lock()
-	defer dbs.mu.Unlock()
-
-	// if dbs.sqlDB != nil {
-	// 	return dbs.sqlDB.Ping() == nil
-	// }
-	return false
-}
-
-func (dbs *Session) Connect() error {
-	if dbs.handler == nil {
+// Begin starts a new transactional scope.
+func (s *Session) Begin() error {
+	if s.db == nil {
 		return ErrDBHandler
 	}
+	if s.db.DBLog != nil {
+		s.db.DBLog.Trace("begin new transaction")
+	}
 
-	dbs.mu.Lock()
-	defer dbs.mu.Unlock()
-
+	if tx, err := s.db.engine.SqlDB().Begin(); err != nil {
+		return fmt.Errorf("%w - %v", ErrOperation, err)
+	} else {
+		s.sqlTX = tx
+	}
 	return nil
 }
 
-func (dbs *Session) Close() error {
-	dbs.mu.Lock()
-	defer dbs.mu.Unlock()
+// Commit executes a commit action in transactional scope.
+func (s *Session) Commit() error {
+	// not in transaction
+	if s.sqlTX == nil {
+		return nil
+	}
+	if s.db.DBLog != nil {
+		s.db.DBLog.Trace("transaction commit")
+	}
 
+	if err := s.sqlTX.Commit(); err != nil {
+		return fmt.Errorf("%w - %v", ErrOperation, err)
+	}
+	s.sqlTX = nil
 	return nil
 }
 
-func (dbs *Session) Begin() error {
-	dbs.mu.Lock()
-	defer dbs.mu.Unlock()
+// RollBack executes a rollback action in transactional scope.
+func (s *Session) RollBack() error {
+	// not in transaction
+	if s.sqlTX == nil {
+		return nil
+	}
+	if s.db.DBLog != nil {
+		s.db.DBLog.Trace("transaction rollback")
+	}
 
+	if err := s.sqlTX.Rollback(); err != nil {
+		return fmt.Errorf("%w - %v", ErrOperation, err)
+	}
+	s.sqlTX = nil
 	return nil
 }
 
-func (dbs *Session) Commit() error {
-	dbs.mu.Lock()
-	defer dbs.mu.Unlock()
+func (s *Session) Execute(stmt string, params ...any) (int64, error) {
+	if s.db == nil {
+		return 0, ErrDBHandler
+	}
+	if s.db.DBLog != nil {
+		s.db.DBLog.Debug("SQL:\n---\n%s\nPARAMS: %v\n---", stmt, params)
+	}
 
-	return nil
+	var err error
+	var res sql.Result
+
+	// TODO: add retries
+
+	if s.sqlTX != nil {
+		res, err = s.sqlTX.Exec(stmt, params...)
+	} else {
+		res, err = s.db.engine.SqlDB().Exec(stmt, params...)
+	}
+	if err == nil {
+		return res.RowsAffected()
+	}
+
+	return 0, fmt.Errorf("%w - %v", ErrOperation, err)
 }
 
-func (dbs *Session) RollBack() error {
-	dbs.mu.Lock()
-	defer dbs.mu.Unlock()
+func (s *Session) FetchAll(stmt string, params ...any) ([]Data, error) {
+	if s.db == nil {
+		return nil, ErrDBHandler
+	}
+	if s.db.DBLog != nil {
+		s.db.DBLog.Debug("SQL:\n---\n%s\nPARAMS: %v\n---", stmt, params)
+	}
 
-	return nil
-}
+	var err error
+	var rows *sql.Rows
+	var colNames []string
 
-func (dbs *Session) Execute(stmt string, params ...any) (int64, error) {
-	dbs.mu.Lock()
-	defer dbs.mu.Unlock()
+	// TODO: add retries
 
-	return 0, nil
-}
+	rows, err = s.db.engine.SqlDB().Query(stmt, params...)
+	if err == nil {
+		defer rows.Close()
+		colNames, err = rows.Columns()
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%w - %v", ErrOperation, err)
+	}
 
-func (dbs *Session) FetchAll(stmt string, params ...any) ([]Data, error) {
-	dbs.mu.Lock()
-	defer dbs.mu.Unlock()
+	result := []Data{}
+	lenCols := len(colNames)
 
-	return nil, nil
+	// create empty slice to represent cols data, and second
+	// slice containing pointers to items in cols data slice.
+	colsData := make([]any, lenCols)
+	colsPtrs := make([]any, lenCols)
+	for k := range colsData {
+		colsPtrs[k] = &colsData[k]
+	}
+	for rows.Next() {
+		if err := rows.Scan(colsPtrs...); err != nil {
+			return nil, fmt.Errorf("%w - %v", ErrOperation, err)
+		}
+		rowData := Data{}
+		// retrieve value for each column from data slice,
+		for k, colName := range colNames {
+			rowData[colName] = colsData[k]
+		}
+		result = append(result, rowData)
+	}
+
+	return result, nil
 }

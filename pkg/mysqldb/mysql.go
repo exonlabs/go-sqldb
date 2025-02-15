@@ -6,7 +6,6 @@ package mysqldb
 
 import (
 	"database/sql"
-	"strings"
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 
@@ -14,34 +13,15 @@ import (
 )
 
 type Engine struct {
-	sqlDB *sql.DB
-
 	// database config
 	config *sqldb.Config
+
+	sqlDB *sql.DB
 }
 
-func initConfig(d dictx.Dict) (*sqldb.Config, error) {
-	for _, k := range []string{"database", "host", "username", "password"} {
-		if dictx.IsExist(d, k) {
-			s := strings.TrimSpace(dictx.GetString(d, k, ""))
-			dictx.Set(d, k, s)
-		}
-	}
-
-	if dictx.GetString(d, "database", "") == "" {
-		return sqldb.ErrDBName
-	}
-	if dictx.GetString(d, "host", "") == "" {
-		return sqldb.ErrDBHost
-	}
-	if dictx.GetInt(d, "port", 0) == 0 {
-		return sqldb.ErrDBPort
-	}
-	return nil
-}
-
-func NewEngine(cfg *sqldb.Config) (*Engine, error) {
-	if err := PrepareConfig(cfg); err != nil {
+func NewEngine(config dictx.Dict) (*Engine, error) {
+	cfg, err := GetConfig(config)
+	if err != nil {
 		return nil, err
 	}
 
@@ -50,14 +30,19 @@ func NewEngine(cfg *sqldb.Config) (*Engine, error) {
 	}, nil
 }
 
-func (dbe *Engine) Backend() int {
+func (dbe *Engine) Backend() sqldb.Backend {
 	return sqldb.BACKEND_SQLITE
 }
 
-func (dbe *Engine) Config() *sqldb.Config {
-	return dbe.config
+func (e *Engine) Config() *sqldb.Config {
+	return e.config
 }
 
-func (dbe *Engine) SqlDB() *sql.DB {
-	return dbe.sqlDB
+func (e *Engine) SqlDB() *sql.DB {
+	return e.sqlDB
+}
+
+// GenSchema generates table schema.
+func (*Engine) GenSchema(tablename string, meta *sqldb.TableMeta) string {
+	return ""
 }

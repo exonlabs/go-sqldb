@@ -9,8 +9,39 @@ import (
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/console"
+
+	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 )
 
+// GetConfig creates configuration object from configuration dict.
+// it checks and returns error if not all options have valid values.
+//
+// The parsed config options are:
+//   - database: (string) the database name - REQUIRED
+//   - host: (string) the database server IP or FQDN - REQUIRED
+//   - port: (int) the database server port number - REQUIRED
+//   - username: (string) the database  access username (if any)
+//   - password: (string) the database access password (if any)
+//   - args: (string) the database extra connection params.
+func GetConfig(config dictx.Dict) (*sqldb.Config, error) {
+	cfg := sqldb.NewConfig(config)
+
+	// validations
+	if cfg.Database == "" {
+		return nil, sqldb.ErrDBName
+	}
+	if cfg.Host == "" {
+		return nil, sqldb.ErrDBHost
+	}
+	if cfg.Port == 0 {
+		return nil, sqldb.ErrDBPort
+	}
+
+	return cfg, nil
+}
+
+// InteractiveConfig gets the database configuration interactively from console.
+// The database default options are detailed in [GetConfig]
 func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
 	con, err := console.NewTermConsole()
 	if err != nil {
@@ -73,8 +104,11 @@ func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
 	return cfg, nil
 }
 
-func InteractiveSetup(cfg dictx.Dict) error {
-	if err := PrepareConfig(cfg); err != nil {
+// InteractiveSetup performs an interactive console based database setup.
+// The database config options are detailed in [GetConfig]
+func InteractiveSetup(config dictx.Dict) error {
+	cfg, err := GetConfig(config)
+	if err != nil {
 		return err
 	}
 
@@ -97,11 +131,13 @@ func InteractiveSetup(cfg dictx.Dict) error {
 	}
 
 	// TODO:
-	// DATABASE SETUP
-
+	fmt.Println()
+	fmt.Println("-- TODO -----------------")
 	fmt.Println("database setup:")
-	fmt.Printf("admin user: %s\n", adm_user)
-	fmt.Printf("admin pass: %s\n", adm_pass)
+	fmt.Printf("admin username: %s\n", adm_user)
+	fmt.Printf("admin password: %s\n", adm_pass)
+	fmt.Printf("database config: %s\n", cfg)
+	fmt.Println("-------------------------")
 
 	return nil
 }
