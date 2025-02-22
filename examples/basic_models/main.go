@@ -25,123 +25,151 @@ var (
 	db_config = dictx.Dict{
 		"database": db_path,
 		// "connect_args": "",
-		// "connect_timeout":  5.0,
-		// "connect_interval": 0.5,
+		// "operation_timeout": 5.0,
+		// "retry_interval": 0.5,
 	}
 )
 
 //////////////////////////////// models
 
-type role struct{ sqldb.BaseModel }
+type job struct{ sqldb.BaseModel }
 
-func Role() *role {
-	return &role{sqldb.BaseModel{
-		DefaultTable:  "roles",
-		DefaultOrders: []string{"title ASC"},
-		AutoGuid:      true,
+var Job *job = &job{sqldb.BaseModel{
+	DefaultTable:  "jobs",
+	DefaultOrders: []string{"title ASC"},
+	AutoGuid:      true,
+}}
+
+type jobMeta struct{ sqldb.BaseModelMeta }
+
+var JobMeta *jobMeta = &jobMeta{sqldb.BaseModelMeta{
+	Columns: []sqldb.ColumnMeta{
+		{Name: "title", Type: "VARCHAR(128) NOT NULL",
+			Unique: true, Index: true},
+		{Name: "description", Type: "TEXT"},
+		{Name: "access_level", Type: "INTEGER"},
+		{Name: "high_management", Type: "BOOLEAN DEFAULT false"},
+	},
+	Constraints: []sqldb.ConstraintMeta{
+		{Definition: "CHECK (access_level>=0 AND access_level<=5)"},
+	},
+	AutoGuid: true,
+	Args: dictx.Dict{
+		"sqlite_without_rowid": true,
+	},
+}}
+
+func (*jobMeta) InitialData(dbs *sqldb.Session, _ string) error {
+	jobs := []sqldb.Data{{
+		"title":           "Default_Employee",
+		"description":     "Default Employee Position",
+		"access_level":    1,
+		"high_management": false,
+	}, {
+		"title":           "General_Manager",
+		"description":     "General Manager Position",
+		"access_level":    5,
+		"high_management": true,
 	}}
-}
 
-type roleMeta struct{ sqldb.BaseModelMeta }
+	for _, data := range jobs {
+		// check if already exists
+		job, err := dbs.Query(Job).FilterBy("title", data["title"]).One()
+		if err != nil {
+			return err
+		} else if job != nil { // already exists
+			continue
+		}
 
-func RoleMeta() *roleMeta {
-	return &roleMeta{sqldb.BaseModelMeta{
-		Columns: []sqldb.ColumnMeta{
-			{Name: "title", Type: "VARCHAR(128) NOT NULL", Unique: true, Index: true},
-			{Name: "description", Type: "TEXT"},
-			{Name: "access_level", Type: "INTEGER"},
-			{Name: "builtin", Type: "BOOLEAN DEFAULT 0"},
-		},
-		Constraints: []sqldb.ConstraintMeta{
-			{Definition: "CHECK (access_level>=0 AND access_level<=5)"},
-		},
-		AutoGuid: true,
-		Args: dictx.Dict{
-			"sqlite_without_rowid": true,
-		},
-	}}
-}
-
-func (*roleMeta) InitialData(dbs *sqldb.Session, _ string) error {
-	// check if default 'Administrator' role already exist
-	num, err := sqldb.NewQuery(dbs, Role()).Filter("title=?", "Administrator").Count()
-	if err != nil || num > 0 {
-		return err
+		// create new job
+		if _, err = dbs.Query(Job).Insert(data); err != nil {
+			return err
+		}
 	}
 
-	// create default 'Administrator' role
-	_, err = sqldb.NewQuery(dbs, Role()).Insert(sqldb.Data{
-		"title":        "Administrator",
-		"description":  "Administrator Full Access",
-		"access_level": 5,
-		"builtin":      true,
-	})
-	return err
+	return nil
 }
 
-type user struct{ sqldb.BaseModel }
+type employee struct{ sqldb.BaseModel }
 
-func User() *user {
-	return &user{sqldb.BaseModel{
-		DefaultTable:  "users",
-		DefaultOrders: []string{"username ASC"},
-		AutoGuid:      true,
+var Employee *employee = &employee{sqldb.BaseModel{
+	DefaultTable:  "employees",
+	DefaultOrders: []string{"fullname ASC"},
+	AutoGuid:      true,
+}}
+
+type employeeMeta struct{ sqldb.BaseModelMeta }
+
+var EmployeeMeta *employeeMeta = &employeeMeta{sqldb.BaseModelMeta{
+	Columns: []sqldb.ColumnMeta{
+		{Name: "fullname", Type: "VARCHAR(128) NOT NULL",
+			Unique: true, Index: true},
+		{Name: "email", Type: "VARCHAR(256)"},
+		{Name: "active", Type: "BOOLEAN DEFAULT true"},
+		{Name: "job_guid", Type: "VARCHAR(32) NOT NULL"},
+	},
+	Constraints: []sqldb.ConstraintMeta{
+		{Definition: "FOREIGN KEY (job_guid) REFERENCES jobs (guid) " +
+			"ON UPDATE CASCADE ON DELETE RESTRICT"},
+	},
+	AutoGuid: true,
+	Args: dictx.Dict{
+		"sqlite_without_rowid": true,
+	},
+}}
+
+func (*employeeMeta) InitialData(dbs *sqldb.Session, _ string) error {
+	jobs_guids := map[string]string{}
+	if jobs, err := dbs.Query(Job).
+		Columns("guid", "title").All(); err != nil {
+		return err
+	} else {
+		for _, j := range jobs {
+			jobs_guids[j["title"].(string)] = j["guid"].(string)
+		}
+	}
+
+	employees := []sqldb.Data{{
+		"fullname":  "Employee 001",
+		"email":     "employee.001@company.com",
+		"active":    true,
+		"job_title": "General_Manager",
+	}, {
+		"fullname":  "Employee 002",
+		"email":     "employee.002@company.com",
+		"active":    true,
+		"job_title": "Default_Employee",
+	}, {
+		"fullname":  "Employee 003",
+		"email":     "",
+		"active":    false,
+		"job_title": "Default_Employee",
 	}}
-}
 
-type userMeta struct{ sqldb.BaseModelMeta }
+	for _, data := range employees {
+		// check if already exists
+		empl, err := dbs.Query(Employee).
+			FilterBy("fullname", data["fullname"]).One()
+		if err != nil {
+			return err
+		} else if empl != nil { // already exists
+			continue
+		}
 
-func UserMeta() *userMeta {
-	return &userMeta{sqldb.BaseModelMeta{
-		Columns: []sqldb.ColumnMeta{
-			{Name: "username", Type: "VARCHAR(128) NOT NULL",
-				Unique: true, Index: true},
-			{Name: "password", Type: "VARCHAR(128) NOT NULL"},
-			{Name: "enabled", Type: "BOOLEAN DEFAULT 1"},
-			{Name: "role_guid", Type: "VARCHAR(32) NOT NULL"},
-		},
-		Constraints: []sqldb.ConstraintMeta{
-			{Definition: "FOREIGN KEY (role_guid) REFERENCES roles (guid) " +
-				"ON UPDATE CASCADE ON DELETE RESTRICT"},
-		},
-		AutoGuid: true,
-		Args: dictx.Dict{
-			"sqlite_without_rowid": true,
-		},
-	}}
-}
+		// check job exists
+		if job_guid, ok := jobs_guids[data["job_title"].(string)]; ok {
+			data["job_guid"] = job_guid
+			delete(data, "job_title")
+		} else {
+			return fmt.Errorf("job not found: %v", data["job_title"])
+		}
 
-func (*userMeta) InitialData(dbs *sqldb.Session, _ string) error {
-	// if dbs == nil {
-	// 	return errors.New("invalid database session")
-	// }
+		// create new employee
+		if _, err = dbs.Query(Employee).Insert(data); err != nil {
+			return err
+		}
+	}
 
-	// // check if default 'Admin' user already exist
-	// num, err := dbs.Query(User).Filter("username=?", "admin").Count()
-	// if err != nil || num > 0 {
-	// 	return err
-	// }
-
-	// // get default 'Administrator' role
-	// role, err := sqldb.NewQuery(dbs, Role()).Filter("title=?", "Administrator").One()
-	// if err != nil {
-	// 	return err
-	// } else if role == nil {
-	// 	return errors.New("default 'Administrator' role not found")
-	// }
-	// role_guid := role.GetString("guid", "")
-	// if len(role_guid) == 0 {
-	// 	return errors.New("invalid empty 'Administrator' role guid")
-	// }
-
-	// // create default 'Admin' user
-	// _, err = dbs.Query(User).Insert(sqldb.Data{
-	// 	"username":  "admin",
-	// 	"password":  "12345",
-	// 	"enabled":   true,
-	// 	"role_guid": role_guid,
-	// })
-	// return err
 	return nil
 }
 
@@ -159,9 +187,9 @@ func (*userMeta) InitialData(dbs *sqldb.Session, _ string) error {
 // }
 
 func run_initialize(db *sqldb.Database) error {
-	metainfo := map[string]sqldb.ModelMeta{
-		Role().DefaultTable: RoleMeta(),
-		User().DefaultTable: UserMeta(),
+	metainfo := []sqldb.TableModelMeta{
+		{TableName: Job.DefaultTable, ModelMeta: JobMeta},
+		{TableName: Employee.DefaultTable, ModelMeta: EmployeeMeta},
 	}
 	return sqldb.InitializeDatabase(db, metainfo)
 }

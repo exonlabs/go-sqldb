@@ -17,7 +17,7 @@ type Session struct {
 	sqlTX *sql.Tx
 }
 
-// creates new database session object
+// creates new database session object.
 func newSession(db *Database) (*Session, error) {
 	if db.DBLog != nil {
 		db.DBLog.Debug("new session")
@@ -25,6 +25,11 @@ func newSession(db *Database) (*Session, error) {
 	return &Session{
 		db: db,
 	}, nil
+}
+
+// Query creates new query object on current session.
+func (s *Session) Query(model Model) *Query {
+	return NewQuery(s, model)
 }
 
 // Begin starts a new transactional scope.
@@ -78,7 +83,9 @@ func (s *Session) RollBack() error {
 	return nil
 }
 
-func (s *Session) Execute(stmt string, params ...any) (int64, error) {
+// Execute executes a query without returning any rows. it takes the statment
+// to run and the args are for any placeholder parameters in the query.
+func (s *Session) Execute(stmt string, params ...any) (int, error) {
 	if s.db == nil {
 		return 0, ErrDBHandler
 	}
@@ -97,12 +104,15 @@ func (s *Session) Execute(stmt string, params ...any) (int64, error) {
 		res, err = s.db.engine.SqlDB().Exec(stmt, params...)
 	}
 	if err == nil {
-		return res.RowsAffected()
+		n, err := res.RowsAffected()
+		return int(n), err
 	}
 
 	return 0, fmt.Errorf("%w - %v", ErrOperation, err)
 }
 
+// FetchAll executes a query that returns rows. it takes the statment
+// to run and the args are for any placeholder parameters in the query.
 func (s *Session) FetchAll(stmt string, params ...any) ([]Data, error) {
 	if s.db == nil {
 		return nil, ErrDBHandler

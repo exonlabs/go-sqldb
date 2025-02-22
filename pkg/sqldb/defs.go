@@ -12,13 +12,12 @@ import (
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 )
 
+// SQL statment variable placeholder
+const SQL_PLACEHOLDER = "?"
+
 // Data type defines the table column data. where each column data is
 // represented into a map for columns as keys and data as values.
 type Data = map[string]any
-
-// DataAdaptor defines adaptor functions for columns data encoding/decoding
-// when reading and writing from the database.
-type DataAdaptor func(any) (any, error)
 
 // Backend represents the databases type.
 type Backend uint8

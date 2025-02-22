@@ -6,6 +6,7 @@ package sqldb
 
 import (
 	"fmt"
+	"regexp"
 
 	uuid "github.com/satori/go.uuid"
 )
@@ -16,21 +17,8 @@ func NewGuid() string {
 	return fmt.Sprintf("%x", u.Bytes())
 }
 
-// // FormatData applies data adaptors functions to data map.
-// // adaptor function matching is done by adaptor name and data keys.
-// // data values are modified in place in the original data map.
-// func FormatData(adaptors map[string]DataAdaptor, data ...Data) error {
-// 	for i := range data {
-// 		// loop adaptors and match adaptor name in data
-// 		for name, fn := range adaptors {
-// 			if oldVal, ok := data[i][name]; ok {
-// 				newVal, err := fn(oldVal)
-// 				if err != nil {
-// 					return err
-// 				}
-// 				data[i][name] = newVal
-// 			}
-// 		}
-// 	}
-// 	return nil
-// }
+// SqlIdent checks for a valid SQL identifier string.
+func SqlIdent(s string) bool {
+	matched, _ := regexp.MatchString("^[a-zA-Z0-9_]+$", s)
+	return matched
+}

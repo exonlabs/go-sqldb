@@ -20,47 +20,47 @@ type Database struct {
 
 	// breakEvent signals a break operation.
 	breakEvent *events.Event
-	// termEvent signals a termination operation.
+	// termEvent signals a termination event.
 	termEvent *events.Event
 
-	// ConnectTimeout defines the timeout in seconds for database connection.
-	// use 0 or negative value to disable timeout.
-	ConnectTimeout float64
-	// ConnectInterval defines the time interval in seconds between connect
-	// retries. trials is done untill connection opens or timeout is reached.
-	// connect interval value must be > 0.
-	ConnectInterval float64
+	// OperationTimeout defines the timeout in seconds for database operation.
+	// use 0 or negative value to disable operation timeout.
+	OperationTimeout float64
+	// RetryInterval defines the time interval in seconds between operation
+	// retries. trials are done untill operation is done or timeout is reached.
+	// retry interval value must be > 0.
+	RetryInterval float64
 }
 
 // NewDatabase creates a new database handler.
 //
 // The parsed options are:
-//   - connect_timeout: (float64) the timeout in seconds for database connection.
-//     use 0 or negative value to disable timeout.
-//   - connect_interval: (float64) the time interval in seconds between connect
-//     retries. trials is done untill connection opens or timeout is reached.
-//     connect interval value must be > 0.
+//   - operation_timeout: (float64) the timeout in seconds for database operation.
+//     use 0 or negative value to disable operation timeout.
+//   - retry_interval: (float64) the time interval in seconds between operation
+//     retries. trials are done untill operation is done or timeout is reached.
+//     retry interval value must be > 0.
 func NewDatabase(engine Engine, dblog *logging.Logger, opts dictx.Dict) (*Database, error) {
 	if engine == nil {
 		return nil, ErrDBEngine
 	}
 
 	db := &Database{
-		engine:          engine,
-		DBLog:           dblog,
-		breakEvent:      events.New(),
-		termEvent:       events.New(),
-		ConnectTimeout:  5.0,
-		ConnectInterval: 0.2,
+		engine:           engine,
+		DBLog:            dblog,
+		breakEvent:       events.New(),
+		termEvent:        events.New(),
+		OperationTimeout: 5.0,
+		RetryInterval:    0.2,
 	}
 
-	if v := dictx.GetFloat(opts, "connect_timeout", 0); v > 0 {
-		db.ConnectTimeout = v
+	if v := dictx.GetFloat(opts, "operation_timeout", 0); v > 0 {
+		db.OperationTimeout = v
 	} else {
-		db.ConnectTimeout = -1
+		db.OperationTimeout = -1
 	}
-	if v := dictx.GetFloat(opts, "connect_interval", 0); v > 0 {
-		db.ConnectInterval = v
+	if v := dictx.GetFloat(opts, "retry_interval", 0); v > 0 {
+		db.RetryInterval = v
 	}
 
 	return db, nil
@@ -95,15 +95,15 @@ func (db *Database) Break() {
 	db.breakEvent.Set()
 }
 
-// Closes all the database sessions and operation.
+// Closes all the database sessions and operations.
 func (db *Database) Close() {
+	db.breakEvent.Set()
 	db.termEvent.Set()
 }
 
-// InitializeDatabase creates the database schema and adds intial data.
-// It first creates and alter the tables schema in a transactional scope, then
-// adds the intial tables data in second transaction.
-func InitializeDatabase(db *Database, metainfo map[string]ModelMeta) error {
+// InitializeDatabase first creates and alter the models table schema,
+// then add the intial tables data.
+func InitializeDatabase(db *Database, metainfo []TableModelMeta) error {
 	if db == nil {
 		return ErrDBHandler
 	}
@@ -117,39 +117,30 @@ func InitializeDatabase(db *Database, metainfo map[string]ModelMeta) error {
 		return err
 	}
 
-	// create and alter schema in transaction
+	// create and alter schema
 	if db.DBLog != nil {
 		db.DBLog.Debug("creating tables schema")
 	}
-	if err = dbs.Begin(); err == nil {
-		for tablename, meta := range metainfo {
-			if err = meta.CreateSchema(dbs, tablename); err != nil {
-				return err
-			}
+	for _, v := range metainfo {
+		if err = v.ModelMeta.CreateSchema(dbs, v.TableName); err != nil {
+			return err
 		}
-		for tablename, meta := range metainfo {
-			if err = meta.AlterSchema(dbs, tablename); err != nil {
-				return err
-			}
-		}
-		err = dbs.Commit()
 	}
-	if err != nil {
-		return err
+	for _, v := range metainfo {
+		if err = v.ModelMeta.AlterSchema(dbs, v.TableName); err != nil {
+			return err
+		}
 	}
 
-	// add intial data to tables in transaction
+	// add intial data to tables
 	if db.DBLog != nil {
 		db.DBLog.Debug("adding tables initial data")
 	}
-	if err = dbs.Begin(); err == nil {
-		for tablename, meta := range metainfo {
-			if err = meta.InitialData(dbs, tablename); err != nil {
-				return err
-			}
+	for _, v := range metainfo {
+		if err = v.ModelMeta.InitialData(dbs, v.TableName); err != nil {
+			return err
 		}
-		err = dbs.Commit()
 	}
 
-	return err
+	return nil
 }
