@@ -5,8 +5,9 @@
 package sqldb
 
 import (
+	"context"
+
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
-	"github.com/exonlabs/go-utils/pkg/events"
 	"github.com/exonlabs/go-utils/pkg/logging"
 )
 
@@ -14,14 +15,12 @@ import (
 type Database struct {
 	// engine represents the database backend
 	engine Engine
+	// database context
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	// DBLog is the logger instance for database logging.
 	DBLog *logging.Logger
-
-	// breakEvent signals a break operation.
-	breakEvent *events.Event
-	// termEvent signals a termination event.
-	termEvent *events.Event
 
 	// OperationTimeout defines the timeout in seconds for database operation.
 	// use 0 or negative value to disable operation timeout.
@@ -48,11 +47,10 @@ func NewDatabase(engine Engine, dblog *logging.Logger, opts dictx.Dict) (*Databa
 	db := &Database{
 		engine:           engine,
 		DBLog:            dblog,
-		breakEvent:       events.New(),
-		termEvent:        events.New(),
 		OperationTimeout: 5.0,
 		RetryInterval:    0.2,
 	}
+	db.ctx, db.ctxCancel = context.WithCancel(context.Background())
 
 	if v := dictx.GetFloat(opts, "operation_timeout", 0); v > 0 {
 		db.OperationTimeout = v
@@ -90,15 +88,11 @@ func (db *Database) IsActive() bool {
 	return false
 }
 
-// Breaks any active database operation.
-func (db *Database) Break() {
-	db.breakEvent.Set()
-}
-
 // Closes all the database sessions and operations.
 func (db *Database) Close() {
-	db.breakEvent.Set()
-	db.termEvent.Set()
+	if db.ctx != nil {
+		db.ctxCancel()
+	}
 }
 
 // InitializeDatabase first creates and alter the models table schema,

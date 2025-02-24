@@ -5,8 +5,13 @@
 package sqldb
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"time"
+
+	"github.com/exonlabs/go-utils/pkg/events"
 )
 
 // Session represents the database session object.
@@ -15,6 +20,9 @@ type Session struct {
 	db *Database
 	// sql transactioin handler
 	sqlTX *sql.Tx
+	// ctxBreak signals a break operation.
+	ctxBreak   context.CancelFunc
+	breakEvent *events.Event
 }
 
 // creates new database session object.
@@ -23,13 +31,22 @@ func newSession(db *Database) (*Session, error) {
 		db.DBLog.Debug("new session")
 	}
 	return &Session{
-		db: db,
+		db:         db,
+		breakEvent: events.New(),
 	}, nil
 }
 
 // Query creates new query object on current session.
 func (s *Session) Query(model Model) *Query {
 	return NewQuery(s, model)
+}
+
+// Breaks active session operation.
+func (s *Session) Break() {
+	s.breakEvent.Set()
+	if s.ctxBreak != nil {
+		s.ctxBreak()
+	}
 }
 
 // Begin starts a new transactional scope.
@@ -49,7 +66,7 @@ func (s *Session) Begin() error {
 	return nil
 }
 
-// Commit executes a commit action in transactional scope.
+// Commit runs a commit action in transactional scope.
 func (s *Session) Commit() error {
 	// not in transaction
 	if s.sqlTX == nil {
@@ -66,7 +83,7 @@ func (s *Session) Commit() error {
 	return nil
 }
 
-// RollBack executes a rollback action in transactional scope.
+// RollBack runs a rollback action in transactional scope.
 func (s *Session) RollBack() error {
 	// not in transaction
 	if s.sqlTX == nil {
@@ -83,7 +100,7 @@ func (s *Session) RollBack() error {
 	return nil
 }
 
-// Execute executes a query without returning any rows. it takes the statment
+// Executes runs a query without returning any rows. it takes the statment
 // to run and the args are for any placeholder parameters in the query.
 func (s *Session) Execute(stmt string, params ...any) (int, error) {
 	if s.db == nil {
@@ -94,24 +111,40 @@ func (s *Session) Execute(stmt string, params ...any) (int, error) {
 	}
 
 	var err error
+	var ctx context.Context
 	var res sql.Result
 
-	// TODO: add retries
+	s.breakEvent.Clear()
+	ctx, s.ctxBreak = context.WithDeadline(s.db.ctx, time.Now().Add(
+		time.Duration(s.db.OperationTimeout*float64(time.Second))))
+	defer s.ctxBreak()
 
-	if s.sqlTX != nil {
-		res, err = s.sqlTX.Exec(stmt, params...)
-	} else {
-		res, err = s.db.engine.SqlDB().Exec(stmt, params...)
-	}
-	if err == nil {
-		n, err := res.RowsAffected()
-		return int(n), err
+	for {
+		if s.sqlTX != nil {
+			res, err = s.sqlTX.ExecContext(ctx, stmt, params...)
+		} else {
+			res, err = s.db.engine.SqlDB().ExecContext(ctx, stmt, params...)
+		}
+		if err == nil {
+			n, err := res.RowsAffected()
+			return int(n), err
+		} else if !s.db.engine.CanRetryErr(err) {
+			break
+		}
+
+		s.breakEvent.Wait(s.db.RetryInterval)
+
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return 0, ErrBreak
+		} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return 0, ErrTimeout
+		}
 	}
 
 	return 0, fmt.Errorf("%w - %v", ErrOperation, err)
 }
 
-// FetchAll executes a query that returns rows. it takes the statment
+// FetchAll runs a query that returns rows. it takes the statment
 // to run and the args are for any placeholder parameters in the query.
 func (s *Session) FetchAll(stmt string, params ...any) ([]Data, error) {
 	if s.db == nil {
@@ -122,18 +155,35 @@ func (s *Session) FetchAll(stmt string, params ...any) ([]Data, error) {
 	}
 
 	var err error
+	var ctx context.Context
 	var rows *sql.Rows
 	var colNames []string
 
-	// TODO: add retries
+	s.breakEvent.Clear()
+	ctx, s.ctxBreak = context.WithDeadline(s.db.ctx, time.Now().Add(
+		time.Duration(s.db.OperationTimeout*float64(time.Second))))
+	defer s.ctxBreak()
 
-	rows, err = s.db.engine.SqlDB().Query(stmt, params...)
-	if err == nil {
-		defer rows.Close()
-		colNames, err = rows.Columns()
-	}
-	if err != nil {
-		return nil, fmt.Errorf("%w - %v", ErrOperation, err)
+	for {
+		rows, err = s.db.engine.SqlDB().QueryContext(ctx, stmt, params...)
+		if err == nil {
+			defer rows.Close()
+			colNames, err = rows.Columns()
+			if err != nil {
+				return nil, fmt.Errorf("%w - %v", ErrOperation, err)
+			}
+			break
+		} else if !s.db.engine.CanRetryErr(err) {
+			return nil, fmt.Errorf("%w - %v", ErrOperation, err)
+		}
+
+		s.breakEvent.Wait(s.db.RetryInterval)
+
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return nil, ErrBreak
+		} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, ErrTimeout
+		}
 	}
 
 	result := []Data{}
