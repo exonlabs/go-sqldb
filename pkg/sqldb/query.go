@@ -135,6 +135,10 @@ func (q *Query) Limit(limit int) *Query {
 
 // All returns all data entries from table matching defined filters.
 func (q *Query) All() ([]Data, error) {
+	if q.dbs == nil {
+		return nil, ErrDBSession
+	}
+
 	// create the statment
 	stmt := "SELECT "
 	if q.dbs.db.Backend() == BACKEND_MSSQL &&
@@ -229,6 +233,10 @@ func (q *Query) Get(guid string) (Data, error) {
 
 // Counts the number of table entries matching defined filters.
 func (q *Query) Count() (int, error) {
+	if q.dbs == nil {
+		return 0, ErrDBSession
+	}
+
 	// create the statment
 	stmt := "SELECT count(*) as count FROM " + q.tablename
 	if q.filter != "" {
@@ -268,6 +276,9 @@ func (q *Query) Count() (int, error) {
 // If Model AutoGuid is enabled, a new guid value is generated when the
 // insert data have empty or no guid value.
 func (q *Query) Insert(data Data) (string, error) {
+	if q.dbs == nil {
+		return "", ErrDBSession
+	}
 	if data == nil {
 		return "", fmt.Errorf("%w - empty insert data", ErrOperation)
 	}
@@ -309,6 +320,9 @@ func (q *Query) Insert(data Data) (string, error) {
 // Updates data in table matching defined filters and returns the number
 // of affected entries.
 func (q *Query) Update(data Data) (int, error) {
+	if q.dbs == nil {
+		return 0, ErrDBSession
+	}
 	if data == nil {
 		return 0, fmt.Errorf("%w - empty update data", ErrOperation)
 	}
@@ -340,6 +354,10 @@ func (q *Query) Update(data Data) (int, error) {
 // Deletes data from table matching defined filters and returns the number
 // of affected entries.
 func (q *Query) Delete() (int, error) {
+	if q.dbs == nil {
+		return 0, ErrDBSession
+	}
+
 	stmt := "DELETE FROM " + q.tablename
 	if q.filter != "" {
 		stmt += "\nWHERE " + q.filter

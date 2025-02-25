@@ -12,7 +12,7 @@ import (
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 
 	"github.com/exonlabs/go-sqldb/pkg/sqldb"
-	"github.com/mattn/go-sqlite3"
+	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
 // Engine represents the backend engine structure.
@@ -76,7 +76,7 @@ func (e *Engine) Open() error {
 
 	dsn := fmt.Sprintf("%s?%s", e.config.Database, extargs)
 	if db, err := sql.Open("sqlite3", dsn); err != nil {
-		return err
+		return fmt.Errorf("%w - %v", sqldb.ErrOpen, err)
 	} else {
 		e.sqlDB = db
 	}
@@ -93,7 +93,8 @@ func (e *Engine) Close() {
 // CanRetryErr checks weather an operation error type can be retried.
 func (e *Engine) CanRetryErr(err error) bool {
 	switch err {
-	case sqlite3.ErrBusy, sqlite3.ErrLocked:
+	case sqlite3.ErrBusy, sqlite3.ErrLocked, sqlite3.ErrProtocol,
+		sqlite3.ErrIoErr, sqlite3.ErrCantOpen:
 		return true
 	}
 	return false

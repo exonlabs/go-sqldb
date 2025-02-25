@@ -10,6 +10,7 @@ import (
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 
 	"github.com/exonlabs/go-sqldb/pkg/sqldb"
+	mysql "github.com/exonlabs/mysql"
 )
 
 // Engine represents the backend engine structure.
@@ -66,6 +67,10 @@ func (e *Engine) Close() {
 
 // CanRetryErr checks weather an operation error type can be retried.
 func (e *Engine) CanRetryErr(err error) bool {
+	switch err {
+	case mysql.ErrBusyBuffer:
+		return true
+	}
 	return false
 }
 

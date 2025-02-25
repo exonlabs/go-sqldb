@@ -15,8 +15,6 @@ var (
 
 	// ErrDBHandler indicates an invalid or not defined database handler.
 	ErrDBHandler = fmt.Errorf("%winvalid database handler", ErrError)
-	// ErrDBBackend indicates an invalid or not defined database backend.
-	ErrDBBackend = fmt.Errorf("%winvalid database backend", ErrError)
 	// ErrDBEngine indicates an invalid or not defined database engine.
 	ErrDBEngine = fmt.Errorf("%winvalid database engine", ErrError)
 	// ErrDBSession indicates an invalid or not defined database session.

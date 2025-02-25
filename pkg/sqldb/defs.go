@@ -42,8 +42,10 @@ func (b Backend) String() string {
 		return "pgsql"
 	case BACKEND_MSSQL:
 		return "mssql"
+	case BACKEND_FILEDB:
+		return "filedb"
 	}
-	return "vv"
+	return ""
 }
 
 // Config represents the database configuration params.

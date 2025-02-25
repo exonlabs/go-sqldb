@@ -23,11 +23,11 @@ type Database struct {
 	DBLog *logging.Logger
 
 	// OperationTimeout defines the timeout in seconds for database operation.
-	// use 0 or negative value to disable operation timeout.
+	// use 0 or negative value to disable operation timeout. (default 5.0 sec)
 	OperationTimeout float64
 	// RetryInterval defines the time interval in seconds between operation
 	// retries. trials are done untill operation is done or timeout is reached.
-	// retry interval value must be > 0.
+	// retry interval value must be > 0. (default 0.1 sec)
 	RetryInterval float64
 }
 
@@ -35,10 +35,10 @@ type Database struct {
 //
 // The parsed options are:
 //   - operation_timeout: (float64) the timeout in seconds for database operation.
-//     use 0 or negative value to disable operation timeout.
+//     use 0 or negative value to disable operation timeout. (default 5.0 sec)
 //   - retry_interval: (float64) the time interval in seconds between operation
 //     retries. trials are done untill operation is done or timeout is reached.
-//     retry interval value must be > 0.
+//     retry interval value must be > 0. (default 0.1 sec)
 func NewDatabase(engine Engine, dblog *logging.Logger, opts dictx.Dict) (*Database, error) {
 	if engine == nil {
 		return nil, ErrDBEngine
@@ -48,14 +48,16 @@ func NewDatabase(engine Engine, dblog *logging.Logger, opts dictx.Dict) (*Databa
 		engine:           engine,
 		DBLog:            dblog,
 		OperationTimeout: 5.0,
-		RetryInterval:    0.2,
+		RetryInterval:    0.1,
 	}
 	db.ctx, db.ctxCancel = context.WithCancel(context.Background())
 
-	if v := dictx.GetFloat(opts, "operation_timeout", 0); v > 0 {
-		db.OperationTimeout = v
-	} else {
-		db.OperationTimeout = -1
+	if dictx.IsExist(opts, "operation_timeout") {
+		if v := dictx.GetFloat(opts, "operation_timeout", 0); v > 0 {
+			db.OperationTimeout = v
+		} else {
+			db.OperationTimeout = -1
+		}
 	}
 	if v := dictx.GetFloat(opts, "retry_interval", 0); v > 0 {
 		db.RetryInterval = v

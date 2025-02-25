@@ -10,6 +10,7 @@ import (
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 
 	"github.com/exonlabs/go-sqldb/pkg/sqldb"
+	_ "github.com/microsoft/go-mssqldb"
 )
 
 // Engine represents the backend engine structure.
