@@ -7,7 +7,6 @@ package sqldb
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
@@ -115,8 +114,12 @@ func (s *Session) Execute(stmt string, params ...any) (int, error) {
 	var res sql.Result
 
 	s.breakEvent.Clear()
-	ctx, s.ctxBreak = context.WithDeadline(s.db.ctx, time.Now().Add(
-		time.Duration(s.db.OperationTimeout*float64(time.Second))))
+	if s.db.OperationTimeout > 0 {
+		ctx, s.ctxBreak = context.WithDeadline(s.db.ctx, time.Now().Add(
+			time.Duration(s.db.OperationTimeout*float64(time.Second))))
+	} else {
+		ctx, s.ctxBreak = context.WithCancel(s.db.ctx)
+	}
 	defer s.ctxBreak()
 
 	for {
@@ -128,17 +131,14 @@ func (s *Session) Execute(stmt string, params ...any) (int, error) {
 		if err == nil {
 			n, err := res.RowsAffected()
 			return int(n), err
+		} else if err == context.Canceled {
+			return 0, ErrBreak
+		} else if err == context.DeadlineExceeded {
+			return 0, ErrTimeout
 		} else if !s.db.engine.CanRetryErr(err) {
 			break
 		}
-
 		s.breakEvent.Wait(s.db.RetryInterval)
-
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return 0, ErrBreak
-		} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return 0, ErrTimeout
-		}
 	}
 
 	return 0, fmt.Errorf("%w - %v", ErrOperation, err)
@@ -160,8 +160,12 @@ func (s *Session) FetchAll(stmt string, params ...any) ([]Data, error) {
 	var colNames []string
 
 	s.breakEvent.Clear()
-	ctx, s.ctxBreak = context.WithDeadline(s.db.ctx, time.Now().Add(
-		time.Duration(s.db.OperationTimeout*float64(time.Second))))
+	if s.db.OperationTimeout > 0 {
+		ctx, s.ctxBreak = context.WithDeadline(s.db.ctx, time.Now().Add(
+			time.Duration(s.db.OperationTimeout*float64(time.Second))))
+	} else {
+		ctx, s.ctxBreak = context.WithCancel(s.db.ctx)
+	}
 	defer s.ctxBreak()
 
 	for {
@@ -173,17 +177,14 @@ func (s *Session) FetchAll(stmt string, params ...any) ([]Data, error) {
 				return nil, fmt.Errorf("%w - %v", ErrOperation, err)
 			}
 			break
+		} else if err == context.Canceled {
+			return nil, ErrBreak
+		} else if err == context.DeadlineExceeded {
+			return nil, ErrTimeout
 		} else if !s.db.engine.CanRetryErr(err) {
 			return nil, fmt.Errorf("%w - %v", ErrOperation, err)
 		}
-
 		s.breakEvent.Wait(s.db.RetryInterval)
-
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return nil, ErrBreak
-		} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return nil, ErrTimeout
-		}
 	}
 
 	result := []Data{}

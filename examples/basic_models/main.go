@@ -26,7 +26,7 @@ var (
 		"database": db_path,
 		// "connect_args": "",
 		// "operation_timeout": 5.0,
-		// "retry_interval": 0.5,
+		// "retry_interval": 0.1,
 	}
 )
 
