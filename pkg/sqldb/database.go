@@ -6,21 +6,37 @@ package sqldb
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/logging"
 )
 
+// Engine defines the database engine interface.
+type Engine interface {
+	// Backend returns the engine backend type.
+	Backend() string
+	// SqlDB returns a backend driver handler.
+	SqlDB() (*sql.DB, error)
+	// Release the backend driver handler.
+	Release(*sql.DB) error
+	// CanRetryErr checks weather an operation error type can be retried.
+	CanRetryErr(err error) bool
+	// SqlGenerator returns the engine SQL statment generator.
+	SqlGenerator() SqlGenerator
+}
+
 // Database represents the database object.
 type Database struct {
-	// engine represents the database backend
+	// Log is the logger instance for database logging.
+	Log *logging.Logger
+
+	// engine represents the database backend engine
 	engine Engine
+
 	// database context
 	ctx       context.Context
 	ctxCancel context.CancelFunc
-
-	// DBLog is the logger instance for database logging.
-	DBLog *logging.Logger
 
 	// OperationTimeout defines the timeout in seconds for database operation.
 	// use 0 or negative value to disable operation timeout. (default 5.0 sec)
@@ -39,27 +55,23 @@ type Database struct {
 //   - retry_interval: (float64) the time interval in seconds between operation
 //     retries. trials are done untill operation is done or timeout is reached.
 //     retry interval value must be > 0. (default 0.1 sec)
-func NewDatabase(engine Engine, dblog *logging.Logger, opts dictx.Dict) (*Database, error) {
+func NewDatabase(log *logging.Logger, engine Engine, opts dictx.Dict) (*Database, error) {
 	if engine == nil {
 		return nil, ErrDBEngine
 	}
 
 	db := &Database{
-		engine:           engine,
-		DBLog:            dblog,
-		OperationTimeout: 5.0,
-		RetryInterval:    0.1,
+		Log:    log,
+		engine: engine,
 	}
 	db.ctx, db.ctxCancel = context.WithCancel(context.Background())
 
-	if dictx.IsExist(opts, "operation_timeout") {
-		if v := dictx.GetFloat(opts, "operation_timeout", 0); v > 0 {
-			db.OperationTimeout = v
-		} else {
-			db.OperationTimeout = -1
-		}
+	if v := dictx.GetFloat(opts, "operation_timeout", 5.0); v > 0 {
+		db.OperationTimeout = v
+	} else {
+		db.OperationTimeout = -1
 	}
-	if v := dictx.GetFloat(opts, "retry_interval", 0); v > 0 {
+	if v := dictx.GetFloat(opts, "retry_interval", 0.1); v > 0 {
 		db.RetryInterval = v
 	}
 
@@ -67,76 +79,33 @@ func NewDatabase(engine Engine, dblog *logging.Logger, opts dictx.Dict) (*Databa
 }
 
 // Backend returns the database backend type.
-func (db *Database) Backend() Backend {
+func (db *Database) Backend() string {
 	if db.engine != nil {
 		return db.engine.Backend()
 	}
-	return BACKEND_NONE
+	return ""
 }
 
-// NewSession creates a new session object.
-func (db *Database) NewSession() (*Session, error) {
-	if db.engine == nil {
-		return nil, ErrDBEngine
-	}
-	return newSession(db)
+// Session returns a new session object.
+func (db *Database) Session() *Session {
+	s, _ := NewSession(db)
+	return s
 }
 
-// Checks if database connection is active.
-func (db *Database) IsActive() bool {
+// Ping checks if database connection is active.
+func (db *Database) Ping() bool {
 	if db.engine != nil {
-		return db.engine.SqlDB().Ping() == nil
+		if sqldb, err := db.engine.SqlDB(); err == nil {
+			defer db.engine.Release(sqldb)
+			return sqldb.Ping() == nil
+		}
 	}
 	return false
 }
 
-// Closes all the database sessions and operations.
-func (db *Database) Close() {
-	if db.ctx != nil {
+// Shutdown closes all the database sessions.
+func (db *Database) Shutdown() {
+	if db.ctxCancel != nil {
 		db.ctxCancel()
 	}
-}
-
-// InitializeDatabase first creates and alter the models table schema,
-// then add the intial tables data.
-func InitializeDatabase(db *Database, metainfo []TableModelMeta) error {
-	if db == nil {
-		return ErrDBHandler
-	}
-	if db.engine == nil {
-		return ErrDBEngine
-	}
-
-	// create new session
-	dbs, err := db.NewSession()
-	if err != nil {
-		return err
-	}
-
-	// create and alter schema
-	if db.DBLog != nil {
-		db.DBLog.Debug("creating tables schema")
-	}
-	for _, v := range metainfo {
-		if err = v.ModelMeta.CreateSchema(dbs, v.TableName); err != nil {
-			return err
-		}
-	}
-	for _, v := range metainfo {
-		if err = v.ModelMeta.AlterSchema(dbs, v.TableName); err != nil {
-			return err
-		}
-	}
-
-	// add intial data to tables
-	if db.DBLog != nil {
-		db.DBLog.Debug("adding tables initial data")
-	}
-	for _, v := range metainfo {
-		if err = v.ModelMeta.InitialData(dbs, v.TableName); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

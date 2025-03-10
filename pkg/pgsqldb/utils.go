@@ -9,40 +9,17 @@ import (
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/console"
-
-	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 )
 
-// GetConfig creates configuration object from configuration dict.
-// it checks and returns error if not all options have valid values.
+// InteractiveConfig gets the database configuration interactively from console.
 //
-// The parsed config options are:
+// The parsed options are:
 //   - database: (string) the database name - REQUIRED
 //   - host: (string) the database server IP or FQDN - REQUIRED
 //   - port: (int) the database server port number - REQUIRED
 //   - username: (string) the database  access username (if any)
 //   - password: (string) the database access password (if any)
-//   - args: (string) the database extra connection params.
-func GetConfig(config dictx.Dict) (*sqldb.Config, error) {
-	cfg := sqldb.NewConfig(config)
-
-	// validations
-	if cfg.Database == "" {
-		return nil, sqldb.ErrDBName
-	}
-	if cfg.Host == "" {
-		return nil, sqldb.ErrDBHost
-	}
-	if cfg.Port == 0 {
-		return nil, sqldb.ErrDBPort
-	}
-
-	return cfg, nil
-}
-
-// InteractiveConfig gets the database configuration interactively from console.
-// The database default options are detailed in [GetConfig]
-func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
+func InteractiveConfig(d dictx.Dict) (dictx.Dict, error) {
 	con, err := console.NewTermConsole()
 	if err != nil {
 		return nil, err
@@ -50,36 +27,36 @@ func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
 	defer con.Close()
 
 	// get database name
-	db_name, err := con.Required().ReadValue("Enter database name",
-		dictx.GetString(defaults, "database", ""))
+	db_name, err := con.Required().ReadValue(
+		"Enter database name", dictx.GetString(d, "database", ""))
 	if err != nil {
 		return nil, err
 	}
 
 	// get database host
-	db_host, err := con.Required().ReadValue("Enter database host",
-		dictx.GetString(defaults, "host", "localhost"))
+	db_host, err := con.Required().ReadValue(
+		"Enter database host", dictx.GetString(d, "host", "localhost"))
 	if err != nil {
 		return nil, err
 	}
 
 	// get database port
-	db_port, err := con.Required().ReadNumber("Enter database port",
-		int64(dictx.GetUint(defaults, "port", 5432)))
+	db_port, err := con.Required().ReadNumber(
+		"Enter database port", int64(dictx.GetUint(d, "port", 5432)))
 	if err != nil {
 		return nil, err
 	}
 
 	// get database username
-	db_user, err := con.ReadValue("Enter database username",
-		dictx.GetString(defaults, "username", ""))
+	db_user, err := con.ReadValue(
+		"Enter database username", dictx.GetString(d, "username", ""))
 	if err != nil {
 		return nil, err
 	}
 
 	// get database password
-	db_pass, err := con.Hidden().ReadValue("Enter database password",
-		dictx.GetString(defaults, "password", ""))
+	db_pass, err := con.Hidden().ReadValue(
+		"Enter database password", dictx.GetString(d, "password", ""))
 	if err != nil {
 		return nil, err
 	} else if db_pass != "" {
@@ -89,7 +66,7 @@ func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
 		}
 	}
 
-	cfg, err := dictx.Clone(defaults)
+	cfg, err := dictx.Clone(d)
 	if err != nil {
 		return nil, err
 	}
@@ -105,10 +82,16 @@ func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
 }
 
 // InteractiveSetup performs an interactive console based database setup.
-// The database config options are detailed in [GetConfig]
-func InteractiveSetup(config dictx.Dict) error {
-	cfg, err := GetConfig(config)
-	if err != nil {
+//
+// The parsed options are:
+//   - database: (string) the database name - REQUIRED
+//   - host: (string) the database server IP or FQDN - REQUIRED
+//   - port: (int) the database server port number - REQUIRED
+//   - username: (string) the database  access username (if any)
+//   - password: (string) the database access password (if any)
+func InteractiveSetup(d dictx.Dict) error {
+	cfg := &Config{}
+	if err := cfg.InitConfig(d); err != nil {
 		return err
 	}
 

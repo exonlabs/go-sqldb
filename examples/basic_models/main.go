@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -32,144 +33,162 @@ var (
 
 //////////////////////////////// models
 
-type job struct{ sqldb.BaseModel }
+type group struct{ sqldb.BaseModel }
 
-var Job *job = &job{sqldb.BaseModel{
-	DefaultTable:  "jobs",
+var Group = &group{sqldb.BaseModel{
+	DefaultTable:  "groups",
 	DefaultOrders: []string{"title ASC"},
 	AutoGuid:      true,
 }}
 
-type jobMeta struct{ sqldb.BaseModelMeta }
+func (m *group) ModelMeta() *sqldb.TableMeta {
+	return &sqldb.TableMeta{
+		Columns: []sqldb.TableColumn{
+			{Name: "title", Type: "VARCHAR(128) NOT NULL",
+				Unique: true, Index: true},
+			{Name: "description", Type: "TEXT"},
+			{Name: "access_level", Type: "INTEGER"},
+			{Name: "public_join", Type: "BOOLEAN DEFAULT false"},
+		},
+		Constraints: []sqldb.TableConstraint{
+			{Definition: "CHECK (access_level>=1 AND access_level<=5)"},
+		},
+		AutoGuid: true,
+		Args: dictx.Dict{
+			"without_rowid": true,
+		},
+	}
+}
 
-var JobMeta *jobMeta = &jobMeta{sqldb.BaseModelMeta{
-	Columns: []sqldb.ColumnMeta{
-		{Name: "title", Type: "VARCHAR(128) NOT NULL",
-			Unique: true, Index: true},
-		{Name: "description", Type: "TEXT"},
-		{Name: "access_level", Type: "INTEGER"},
-		{Name: "high_management", Type: "BOOLEAN DEFAULT false"},
-	},
-	Constraints: []sqldb.ConstraintMeta{
-		{Definition: "CHECK (access_level>=0 AND access_level<=5)"},
-	},
-	AutoGuid: true,
-	Args: dictx.Dict{
-		"sqlite_without_rowid": true,
-	},
-}}
+func (m *group) CreateIfNotExist(dbs *sqldb.Session, data sqldb.Data) error {
+	title := dictx.GetString(data, "title", "")
+	if title == "" {
+		return errors.New("invalid data, empty 'title' value")
+	}
 
-func (*jobMeta) InitialData(dbs *sqldb.Session, _ string) error {
-	jobs := []sqldb.Data{{
-		"title":           "Default_Employee",
-		"description":     "Default Employee Position",
-		"access_level":    1,
-		"high_management": false,
+	// check if already exists
+	n, err := dbs.Query(Group).FilterBy("title", title).Count()
+	if err != nil {
+		return err
+	} else if n > 0 {
+		return nil
+	}
+
+	// create new entry
+	_, err = dbs.Query(Group).Insert(data)
+	return err
+}
+
+func (m *group) InitialData(dbs *sqldb.Session, _ string) error {
+	groups := []sqldb.Data{{
+		"title":        "managers",
+		"description":  "company managers",
+		"access_level": 5,
+		"public_join":  false,
 	}, {
-		"title":           "General_Manager",
-		"description":     "General Manager Position",
-		"access_level":    5,
-		"high_management": true,
+		"title":        "employees",
+		"description":  "all company employees",
+		"access_level": 3,
+		"public_join":  false,
+	}, {
+		"title":        "visitors",
+		"description":  "company guests and visitors",
+		"access_level": 1,
+		"public_join":  true,
 	}}
 
-	for _, data := range jobs {
-		// check if already exists
-		job, err := dbs.Query(Job).FilterBy("title", data["title"]).One()
-		if err != nil {
-			return err
-		} else if job != nil { // already exists
-			continue
-		}
-
-		// create new job
-		if _, err = dbs.Query(Job).Insert(data); err != nil {
+	for _, data := range groups {
+		if err := m.CreateIfNotExist(dbs, data); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
-type employee struct{ sqldb.BaseModel }
+type person struct{ sqldb.BaseModel }
 
-var Employee *employee = &employee{sqldb.BaseModel{
-	DefaultTable:  "employees",
-	DefaultOrders: []string{"fullname ASC"},
+var Person *person = &person{sqldb.BaseModel{
+	DefaultTable:  "persons",
+	DefaultOrders: []string{"name ASC"},
 	AutoGuid:      true,
 }}
 
-type employeeMeta struct{ sqldb.BaseModelMeta }
+func (m *person) ModelMeta() *sqldb.TableMeta {
+	return &sqldb.TableMeta{
+		Columns: []sqldb.TableColumn{
+			{Name: "name", Type: "VARCHAR(128) NOT NULL",
+				Unique: true, Index: true},
+			{Name: "email", Type: "VARCHAR(256)"},
+			{Name: "active", Type: "BOOLEAN DEFAULT true"},
+			{Name: "group_guid", Type: "VARCHAR(32) NOT NULL"},
+		},
+		Constraints: []sqldb.TableConstraint{
+			{Definition: "FOREIGN KEY (group_guid) REFERENCES groups (guid) " +
+				"ON UPDATE CASCADE ON DELETE RESTRICT"},
+		},
+		AutoGuid: true,
+		Args: dictx.Dict{
+			"without_rowid": true,
+		},
+	}
+}
 
-var EmployeeMeta *employeeMeta = &employeeMeta{sqldb.BaseModelMeta{
-	Columns: []sqldb.ColumnMeta{
-		{Name: "fullname", Type: "VARCHAR(128) NOT NULL",
-			Unique: true, Index: true},
-		{Name: "email", Type: "VARCHAR(256)"},
-		{Name: "active", Type: "BOOLEAN DEFAULT true"},
-		{Name: "job_guid", Type: "VARCHAR(32) NOT NULL"},
-	},
-	Constraints: []sqldb.ConstraintMeta{
-		{Definition: "FOREIGN KEY (job_guid) REFERENCES jobs (guid) " +
-			"ON UPDATE CASCADE ON DELETE RESTRICT"},
-	},
-	AutoGuid: true,
-	Args: dictx.Dict{
-		"sqlite_without_rowid": true,
-	},
-}}
-
-func (*employeeMeta) InitialData(dbs *sqldb.Session, _ string) error {
-	jobs_guids := map[string]string{}
-	if jobs, err := dbs.Query(Job).
-		Columns("guid", "title").All(); err != nil {
-		return err
-	} else {
-		for _, j := range jobs {
-			jobs_guids[j["title"].(string)] = j["guid"].(string)
-		}
+func (m *person) CreateIfNotExist(dbs *sqldb.Session, data sqldb.Data) error {
+	name := dictx.GetString(data, "name", "")
+	if name == "" {
+		return errors.New("invalid data, empty 'name' value")
 	}
 
-	employees := []sqldb.Data{{
-		"fullname":  "Employee 001",
-		"email":     "employee.001@company.com",
-		"active":    true,
-		"job_title": "General_Manager",
+	// check if already exists
+	n, err := dbs.Query(Person).FilterBy("name", name).Count()
+	if err != nil {
+		return err
+	} else if n > 0 {
+		return nil
+	}
+
+	// check and get group
+	grp_title := dictx.GetString(data, "group", "")
+	if grp_title == "" {
+		return errors.New("invalid data, empty 'group' value")
+	}
+	grp, err := dbs.Query(Group).FilterBy("title", grp_title).One()
+	if err != nil {
+		return err
+	} else if grp == nil {
+		return fmt.Errorf("group not found: %s", grp_title)
+	}
+
+	// create new entry
+	data["group_guid"] = grp["guid"]
+	delete(data, "group")
+	_, err = dbs.Query(Person).Insert(data)
+	return err
+}
+
+func (m *person) InitialData(dbs *sqldb.Session, _ string) error {
+	persons := []sqldb.Data{{
+		"name":   "Manager",
+		"email":  "manager@company.com",
+		"active": true,
+		"group":  "managers",
 	}, {
-		"fullname":  "Employee 002",
-		"email":     "employee.002@company.com",
-		"active":    true,
-		"job_title": "Default_Employee",
+		"name":   "Employee",
+		"email":  "employee@company.com",
+		"active": true,
+		"group":  "employees",
 	}, {
-		"fullname":  "Employee 003",
-		"email":     "",
-		"active":    false,
-		"job_title": "Default_Employee",
+		"name":   "Guest",
+		"email":  "",
+		"active": false,
+		"group":  "visitors",
 	}}
 
-	for _, data := range employees {
-		// check if already exists
-		empl, err := dbs.Query(Employee).
-			FilterBy("fullname", data["fullname"]).One()
-		if err != nil {
-			return err
-		} else if empl != nil { // already exists
-			continue
-		}
-
-		// check job exists
-		if job_guid, ok := jobs_guids[data["job_title"].(string)]; ok {
-			data["job_guid"] = job_guid
-			delete(data, "job_title")
-		} else {
-			return fmt.Errorf("job not found: %v", data["job_title"])
-		}
-
-		// create new employee
-		if _, err = dbs.Query(Employee).Insert(data); err != nil {
+	for _, data := range persons {
+		if err := m.CreateIfNotExist(dbs, data); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -187,14 +206,14 @@ func (*employeeMeta) InitialData(dbs *sqldb.Session, _ string) error {
 // }
 
 func run_initialize(db *sqldb.Database) error {
-	metainfo := []sqldb.TableModelMeta{
-		{TableName: Job.DefaultTable, ModelMeta: JobMeta},
-		{TableName: Employee.DefaultTable, ModelMeta: EmployeeMeta},
+	metainfo := []sqldb.ModelsMeta{
+		{Table: Group.DefaultTable, Model: Group},
+		{Table: Person.DefaultTable, Model: Person},
 	}
-	return sqldb.InitializeDatabase(db, metainfo)
+	return sqldb.InitializeModels(db, metainfo)
 }
 
-func run_operations(db *sqldb.Database) error {
+func run_operations(_ *sqldb.Database) error {
 	// 	// define tables
 	// 	tables := map[db.TableName]db.IModel{
 	// 		"foobar": &Foobar{},
@@ -287,7 +306,7 @@ func run_operations(db *sqldb.Database) error {
 
 func main() {
 	log := logging.NewStdoutLogger("main")
-	dbLog := log.SubLogger("db")
+	dblog := log.SubLogger("db")
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -307,12 +326,12 @@ func main() {
 	switch {
 	case *debug1:
 		log.Level = logging.TRACE
-		dbLog.Level = logging.TRACE
+		dblog.Level = logging.TRACE
 	case *debug0:
 		log.Level = logging.DEBUG
-		dbLog.Level = logging.DEBUG
+		dblog.Level = logging.DEBUG
 	default:
-		dbLog = nil
+		dblog = nil
 	}
 
 	log.Info("**** starting ****")
@@ -325,18 +344,19 @@ func main() {
 	fmt.Println()
 
 	// create engine
-	db_engine, err := sqlitedb.NewEngine(db_config)
+	engine, err := sqlitedb.NewEngine(db_config)
 	if err != nil {
 		log.Error("create engine failed - %s", err)
 		return
 	}
 
 	// create database handler
-	db, err := sqldb.NewDatabase(db_engine, dbLog, db_config)
+	db, err := sqldb.NewDatabase(dblog, engine, db_config)
 	if err != nil {
 		log.Error("create database handler failed - %s", err)
 		return
 	}
+	defer db.Shutdown()
 
 	// setup database
 	if *setup {
@@ -356,8 +376,9 @@ func main() {
 		if err := run_initialize(db); err != nil {
 			fmt.Printf("Error: %s\n", err)
 		}
-
 		fmt.Println()
+
+		log.Info("done")
 		return
 	}
 

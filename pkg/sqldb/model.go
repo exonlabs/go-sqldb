@@ -4,68 +4,11 @@
 
 package sqldb
 
-import (
-	"github.com/exonlabs/go-utils/pkg/abc/dictx"
-)
-
-// ColumnMeta defines strcture holding column definitions and constraints.
-//
-// References:
-//   - https://www.w3schools.com/sql/sql_create_table.asp
-//   - https://www.w3schools.com/sql/sql_datatypes.asp
-type ColumnMeta struct {
-	// the column name, should be unique per table.
-	Name string
-	// the column data type as defined in SQL syntax.
-	// ex. "VARCHAR(128) NOT NULL", "BOOLEAN NOT NULL DEFAULT false"
-	Type string
-	// set column primary key constraint.
-	Primary bool
-	// set column unique value constraint.
-	Unique bool
-	// set to create column index.
-	Index bool
-}
-
-// ConstraintMeta defines strcture holding constraints definitions.
-//
-// References:
-//   - https://www.w3schools.com/sql/sql_constraints.asp
-type ConstraintMeta struct {
-	// the constraint name, should be unique per table.
-	Name string
-	// the constraint definition as defined in SQL syntax.
-	// ex. "PRIMARY KEY (col1,col2)"
-	//     "FOREIGN KEY (col1) REFERENCES table1 (col2) ON UPDATE CASCADE"
-	//     "UNIQUE (col1,col2)"
-	//     "CHECK (col1 IN (0,1,2))"
-	//     "CHECK (col1>=10 AND col2="val")"
-	Definition string
-}
-
-// TableMeta defines strcture holding table definitions and constraints.
-//
-// References:
-//   - https://www.w3schools.com/sql/sql_create_table.asp
-//   - https://www.w3schools.com/sql/sql_datatypes.asp
-//   - https://www.w3schools.com/sql/sql_constraints.asp
-type TableMeta struct {
-	// Table Columns meta
-	Columns []ColumnMeta
-	// Table Constraints as defined in SQL syntax. constraints are appended to
-	// table after auto generated columns constraints.
-	Constraints []ConstraintMeta
-	// AutoGuid sets weather to enable AutoGuid operations, which is to
-	// create a first primary guid column for table.
-	// guid column is created with schema "guid VARCHAR(32) NOT NULL"
-	AutoGuid bool
-	// Extra options for specific backends. each option is prefixed with the
-	// backend name plus underscore. ex: "sqlite_<OPTION_NAME>"
-	Args dictx.Dict
-}
-
-// Model represents the model interface.
+// Model defines the model interface.
 type Model interface {
+	// ModelMeta returns the model table metainfo.
+	ModelMeta() *TableMeta
+
 	// TableName returns the table name to use in statments.
 	TableName() string
 	// Columns returns the table columns to use in statments.
@@ -78,6 +21,13 @@ type Model interface {
 	DataEncode([]Data) error
 	// DataDecode applies decoding on data after reading from database.
 	DataDecode([]Data) error
+
+	// CreateSchema creates the table schema in database.
+	CreateSchema(dbs *Session, tablename string) error
+	// AlterSchema modifies the table schema in database.
+	AlterSchema(dbs *Session, tablename string) error
+	// InitialData creates the initial data in table.
+	InitialData(dbs *Session, tablename string) error
 }
 
 // BaseModel defines a base model structure.
@@ -116,57 +66,85 @@ func (m *BaseModel) IsAutoGuid() bool {
 }
 
 // DataEncode applies encoding to data before writing to database.
-// does nothing by default.
 func (m *BaseModel) DataEncode([]Data) error {
 	return nil
 }
 
 // DataDecode applies decoding on data after reading from database.
-// does nothing by default.
 func (m *BaseModel) DataDecode([]Data) error {
 	return nil
 }
 
-// ModelMeta represents the model metainfo interface.
-type ModelMeta interface {
-	// CreateSchema creates the table schema in database.
-	CreateSchema(s *Session, tablename string) error
-	// AlterSchema modifies the table schema in database.
-	AlterSchema(s *Session, tablename string) error
-	// InitialData creates the initial data in table.
-	InitialData(s *Session, tablename string) error
-}
-
-// TableModelMeta represents link between table name and model metainfo.
-type TableModelMeta struct {
-	TableName string
-	ModelMeta ModelMeta
-}
-
-// BaseModelMeta defines a base model metainfo structure.
-type BaseModelMeta TableMeta
-
 // CreateSchema creates the table schema in database.
-func (m *BaseModelMeta) CreateSchema(s *Session, tablename string) error {
-	if s.db.engine == nil {
-		return ErrDBEngine
+func (m *BaseModel) CreateSchema(dbs *Session, tablename string) error {
+	// if s.db.Engine == nil {
+	// 	return ErrDBEngine
+	// }
+
+	if dbs.db.Log != nil {
+		dbs.db.Log.Debug("creating schema for table: %s", tablename)
 	}
+	// schema := s.db.Engine.GenSchema(tablename, (*TableMeta)(m))
 
-	if s.db.DBLog != nil {
-		s.db.DBLog.Debug("creating schema for table: %s", tablename)
-	}
-	schema := s.db.engine.GenSchema(tablename, (*TableMeta)(m))
-
-	_, err := s.Execute(schema)
-	return err
-}
-
-// AlterSchema modifies the table schema in database. default nothing.
-func (m *BaseModelMeta) AlterSchema(s *Session, tablename string) error {
+	// _, err := s.Execute(schema)
+	// return err
 	return nil
 }
 
-// InitialData creates the initial data in table. default none.
-func (m *BaseModelMeta) InitialData(s *Session, tablename string) error {
+// AlterSchema modifies the table schema in database.
+func (m *BaseModel) AlterSchema(dbs *Session, tablename string) error {
+	return nil
+}
+
+// InitialData creates the initial data in table.
+func (m *BaseModel) InitialData(dbs *Session, tablename string) error {
+	return nil
+}
+
+////////////////////////////////////////////////////
+
+// ModelsMeta represents link between table name and model metainfo.
+type ModelsMeta struct {
+	Table string
+	Model Model
+}
+
+// InitializeModels creates and alter the database models schema,
+// then adds the models intial data.
+func InitializeModels(db *Database, metainfo []ModelsMeta) error {
+	if db == nil {
+		return ErrDBHandler
+	} else if db.engine == nil {
+		return ErrDBEngine
+	}
+
+	// create new session
+	dbs := db.Session()
+
+	// create and alter schema
+	if db.Log != nil {
+		db.Log.Debug("creating tables schema")
+	}
+	for _, v := range metainfo {
+		if err := v.Model.CreateSchema(dbs, v.Table); err != nil {
+			return err
+		}
+	}
+	for _, v := range metainfo {
+		if err := v.Model.AlterSchema(dbs, v.Table); err != nil {
+			return err
+		}
+	}
+
+	// add intial data to tables
+	if db.Log != nil {
+		db.Log.Debug("adding tables initial data")
+	}
+	for _, v := range metainfo {
+		if err := v.Model.InitialData(dbs, v.Table); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

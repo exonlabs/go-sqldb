@@ -10,66 +10,175 @@ import (
 	"strings"
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
+	"github.com/exonlabs/go-utils/pkg/abc/slicex"
 	"github.com/exonlabs/go-utils/pkg/logging"
-
-	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 
 	"github.com/exonlabs/go-sqldb/pkg/mssqldb"
 	"github.com/exonlabs/go-sqldb/pkg/mysqldb"
 	"github.com/exonlabs/go-sqldb/pkg/pgsqldb"
+	"github.com/exonlabs/go-sqldb/pkg/sqldb"
 	"github.com/exonlabs/go-sqldb/pkg/sqlitedb"
 )
 
 var (
-	db_name    = "test"
-	db_path    = filepath.Join(os.TempDir(), db_name+".db") // for sqlite
-	db_defults = dictx.Dict{
+	BACKENDS = []string{"sqlite", "mysql", "pgsql", "mssql"}
+
+	db_name   = "test"
+	db_path   = os.TempDir()
+	db_config = dictx.Dict{
 		"database": db_name,
 		// "host": "localhost",
 		// "port": 0,
 		// "username": "",
 		// "password": "",
-		// "args": dictx.Dict{},
-		// "connect_timeout":  5.0,
-		// "connect_interval": 0.5,
+		// "connect_args": "",
+		// "operation_timeout": 5.0,
+		// "retry_interval": 0.1,
 	}
 )
 
 //////////////////////////////// models
 
-// type Foobar struct{ *sqldb.BaseModel }
+type job struct{ sqldb.BaseModel }
 
-// func (*Foobar) TableName() string { return "foobar" }
-// func (*Foobar) TableMeta() *sqldb.TableMeta {
-// 	return &sqldb.TableMeta{
-// 		Columns: [][]string{
-// 			{"guid", "TEXT NOT NULL", "PRIMARY"},
-// 			{"col1", "VARCHAR(128) NOT NULL", "UNIQUE INDEX"},
-// 			{"col2", "TEXT"},
-// 			{"col3", "INTEGER"},
-// 			{"col4", "BOOLEAN NOT NULL DEFAULT 0"},
-// 		},
-// 	}
-// }
-// func (*Foobar) DefaultOrders() []string {
-// 	return []string{"col1 ASC"}
-// }
-// func (dbm *Foobar) InitializeData(dbs *sqldb.Session, tblname string) error {
-// 	var err error
-// 	for i := 0; i < 5; i++ {
-// 		var num int64
-// 		num, err = dbs.Query(dbm).Table(tblname).
-// 			Filter("col1=$?", "foo_"+strconv.Itoa(i)).Count()
-// 		if num == 0 {
-// 			_, err = dbs.Query(dbm).Table(tblname).Insert(sqldb.Data{
-// 				"col1": "foo_" + strconv.Itoa(i),
-// 				"col2": "description_" + strconv.Itoa(i),
-// 				"col3": i,
-// 			})
-// 		}
-// 	}
-// 	return err
-// }
+var Job *job = &job{sqldb.BaseModel{
+	DefaultTable:  "jobs",
+	DefaultOrders: []string{"title ASC"},
+	AutoGuid:      true,
+}}
+
+type jobMeta struct{ sqldb.BaseModelMeta }
+
+var JobMeta *jobMeta = &jobMeta{sqldb.BaseModelMeta{
+	Columns: []sqldb.TableColumn{
+		{Name: "title", Type: "VARCHAR(128) NOT NULL",
+			Unique: true, Index: true},
+		{Name: "description", Type: "TEXT"},
+		{Name: "access_level", Type: "INTEGER"},
+		{Name: "high_management", Type: "BOOLEAN DEFAULT false"},
+	},
+	Constraints: []sqldb.TableConstraint{
+		{Definition: "CHECK (access_level>=0 AND access_level<=5)"},
+	},
+	AutoGuid: true,
+	Args: dictx.Dict{
+		"sqlite_without_rowid": true,
+	},
+}}
+
+func (*jobMeta) InitialData(db *sqldb.Database, _ string) error {
+	// jobs := []sqldb.Data{{
+	// 	"title":           "Default_Employee",
+	// 	"description":     "Default Employee Position",
+	// 	"access_level":    1,
+	// 	"high_management": false,
+	// }, {
+	// 	"title":           "General_Manager",
+	// 	"description":     "General Manager Position",
+	// 	"access_level":    5,
+	// 	"high_management": true,
+	// }}
+
+	// for _, data := range jobs {
+	// 	// check if already exists
+	// 	job, err := db.Query(Job).FilterBy("title", data["title"]).One()
+	// 	if err != nil {
+	// 		return err
+	// 	} else if job != nil { // already exists
+	// 		continue
+	// 	}
+
+	// 	// create new job
+	// 	if _, err = db.Query(Job).Insert(data); err != nil {
+	// 		return err
+	// 	}
+	// }
+
+	return nil
+}
+
+type employee struct{ sqldb.BaseModel }
+
+var Employee *employee = &employee{sqldb.BaseModel{
+	DefaultTable:  "employees",
+	DefaultOrders: []string{"fullname ASC"},
+	AutoGuid:      true,
+}}
+
+type employeeMeta struct{ sqldb.BaseModelMeta }
+
+var EmployeeMeta *employeeMeta = &employeeMeta{sqldb.BaseModelMeta{
+	Columns: []sqldb.TableColumn{
+		{Name: "fullname", Type: "VARCHAR(128) NOT NULL",
+			Unique: true, Index: true},
+		{Name: "email", Type: "VARCHAR(256)"},
+		{Name: "active", Type: "BOOLEAN DEFAULT true"},
+		{Name: "job_guid", Type: "VARCHAR(32) NOT NULL"},
+	},
+	Constraints: []sqldb.TableConstraint{
+		{Definition: "FOREIGN KEY (job_guid) REFERENCES jobs (guid) " +
+			"ON UPDATE CASCADE ON DELETE RESTRICT"},
+	},
+	AutoGuid: true,
+	Args: dictx.Dict{
+		"sqlite_without_rowid": true,
+	},
+}}
+
+func (*employeeMeta) InitialData(db *sqldb.Database, _ string) error {
+	// jobs_guids := map[string]string{}
+	// if jobs, err := db.Query(Job).
+	// 	Columns("guid", "title").All(); err != nil {
+	// 	return err
+	// } else {
+	// 	for _, j := range jobs {
+	// 		jobs_guids[j["title"].(string)] = j["guid"].(string)
+	// 	}
+	// }
+
+	// employees := []sqldb.Data{{
+	// 	"fullname":  "Employee 001",
+	// 	"email":     "employee.001@company.com",
+	// 	"active":    true,
+	// 	"job_title": "General_Manager",
+	// }, {
+	// 	"fullname":  "Employee 002",
+	// 	"email":     "employee.002@company.com",
+	// 	"active":    true,
+	// 	"job_title": "Default_Employee",
+	// }, {
+	// 	"fullname":  "Employee 003",
+	// 	"email":     "",
+	// 	"active":    false,
+	// 	"job_title": "Default_Employee",
+	// }}
+
+	// for _, data := range employees {
+	// 	// check if already exists
+	// 	empl, err := db.Query(Employee).
+	// 		FilterBy("fullname", data["fullname"]).One()
+	// 	if err != nil {
+	// 		return err
+	// 	} else if empl != nil { // already exists
+	// 		continue
+	// 	}
+
+	// 	// check job exists
+	// 	if job_guid, ok := jobs_guids[data["job_title"].(string)]; ok {
+	// 		data["job_guid"] = job_guid
+	// 		delete(data, "job_title")
+	// 	} else {
+	// 		return fmt.Errorf("job not found: %v", data["job_title"])
+	// 	}
+
+	// 	// create new employee
+	// 	if _, err = db.Query(Employee).Insert(data); err != nil {
+	// 		return err
+	// 	}
+	// }
+
+	return nil
+}
 
 // func print_data(data []sqldb.Data) {
 // 	if len(data) > 0 {
@@ -172,7 +281,7 @@ func run_operations(db *sqldb.Database) error {
 
 func main() {
 	log := logging.NewStdoutLogger("main")
-	dbLog := log.SubLogger("db")
+	db_log := log.SubLogger("db")
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -184,67 +293,48 @@ func main() {
 		}
 	}()
 
-	backends := []string{
-		fmt.Sprint(sqldb.BACKEND_SQLITE),
-		fmt.Sprint(sqldb.BACKEND_MYSQL),
-		fmt.Sprint(sqldb.BACKEND_PGSQL),
-		fmt.Sprint(sqldb.BACKEND_MSSQL),
-	}
-
 	debug0 := flag.Bool("x", false, "\nenable debug logs")
 	debug1 := flag.Bool("xx", false, "enable debug and trace logs")
 	backend := flag.String("backend", "",
-		fmt.Sprintf("select backend {%s}", strings.Join(backends, "|")))
+		fmt.Sprintf("select backend {%s}", strings.Join(BACKENDS, "|")))
 	setup := flag.Bool("setup", false, "perform database setup")
 	flag.Parse()
 
 	switch {
 	case *debug1:
 		log.Level = logging.TRACE
-		dbLog.Level = logging.TRACE
+		db_log.Level = logging.TRACE
 	case *debug0:
 		log.Level = logging.DEBUG
-		dbLog.Level = logging.DEBUG
+		db_log.Level = logging.DEBUG
 	default:
-		dbLog = nil
+		db_log = nil
 	}
 
-	var err error
-	var db_config dictx.Dict
-	var db_backend sqldb.Backend
-	var db_engine sqldb.Engine
-
-	// selecting backend
-	switch *backend {
-	case fmt.Sprint(sqldb.BACKEND_SQLITE):
-		db_backend = sqldb.BACKEND_SQLITE
-		dictx.Set(db_defults, "database", db_path)
-	case fmt.Sprint(sqldb.BACKEND_MYSQL):
-		db_backend = sqldb.BACKEND_MYSQL
-	case fmt.Sprint(sqldb.BACKEND_PGSQL):
-		db_backend = sqldb.BACKEND_PGSQL
-	case fmt.Sprint(sqldb.BACKEND_MSSQL):
-		db_backend = sqldb.BACKEND_MSSQL
-	default:
+	// check backend
+	if slicex.Index(BACKENDS, *backend) < 0 {
 		fmt.Printf("Error: invalid backend '%s'\n", *backend)
 		return
 	}
 
+	var err error
+
 	log.Info("**** starting ****")
 
-	log.Info("Using Backend: %s", db_backend)
+	log.Info("Using Backend: %s", *backend)
 
 	// setting backend config
 	fmt.Println("\n* Configure database:")
-	switch db_backend {
-	case sqldb.BACKEND_SQLITE:
-		db_config, err = sqlitedb.InteractiveConfig(db_defults)
-	case sqldb.BACKEND_MYSQL:
-		db_config, err = mysqldb.InteractiveConfig(db_defults)
-	case sqldb.BACKEND_PGSQL:
-		db_config, err = pgsqldb.InteractiveConfig(db_defults)
-	case sqldb.BACKEND_MSSQL:
-		db_config, err = mssqldb.InteractiveConfig(db_defults)
+	switch *backend {
+	case "sqlite":
+		dictx.Set(db_config, "database", filepath.Join(db_path, db_name+".db"))
+		db_config, err = sqlitedb.InteractiveConfig(db_config)
+	case "mysql":
+		db_config, err = mysqldb.InteractiveConfig(db_config)
+	case "pgsql":
+		db_config, err = pgsqldb.InteractiveConfig(db_config)
+	case "mssql":
+		db_config, err = mssqldb.InteractiveConfig(db_config)
 	}
 	if err != nil {
 		if !strings.Contains(err.Error(), "EOF") {
@@ -260,15 +350,16 @@ func main() {
 	fmt.Println()
 
 	// create engine
-	switch db_backend {
-	case sqldb.BACKEND_SQLITE:
-		db_engine, err = sqlitedb.NewEngine(db_config)
-	case sqldb.BACKEND_MYSQL:
-		db_engine, err = mysqldb.NewEngine(db_config)
-	case sqldb.BACKEND_PGSQL:
-		db_engine, err = pgsqldb.NewEngine(db_config)
-	case sqldb.BACKEND_MSSQL:
-		db_engine, err = mssqldb.NewEngine(db_config)
+	var engine sqldb.Database
+	switch *backend {
+	case "sqlite":
+		engine, err = sqlitedb.NewEngine(db_config)
+	case "mysql":
+		engine, err = mysqldb.NewEngine(db_config)
+	case "pgsql":
+		engine, err = pgsqldb.NewEngine(db_config)
+	case "mssql":
+		engine, err = mssqldb.NewEngine(db_config)
 	}
 	if err != nil {
 		log.Error("create engine failed - %s", err)
@@ -276,42 +367,50 @@ func main() {
 	}
 
 	// create database handler
-	db, err := sqldb.NewDatabase(db_engine, dbLog, db_config)
+	db, err := sqldb.NewDatabase(db_log, engine, db_config)
 	if err != nil {
 		log.Error("create database handler failed - %s", err)
 		return
 	}
+	defer db.Shutdown()
 
 	// setup database
 	if *setup {
 		fmt.Println("* Setup database:")
-		switch db_backend {
-		case sqldb.BACKEND_SQLITE:
-			err = sqlitedb.InteractiveSetup(db_config)
-		case sqldb.BACKEND_MYSQL:
-			err = mysqldb.InteractiveSetup(db_config)
-		case sqldb.BACKEND_PGSQL:
-			err = pgsqldb.InteractiveSetup(db_config)
-		case sqldb.BACKEND_MSSQL:
-			err = mssqldb.InteractiveSetup(db_config)
-		}
-		if err != nil {
-			if !strings.Contains(err.Error(), "EOF") {
-				fmt.Printf("Error: %s\n", err)
-			}
-		}
-		fmt.Println()
 
-		// TODO
-		// run init database
+		// switch *backend {
+		// case "sqlite":
+		// 	err = sqlitedb.InteractiveSetup(db_config)
+		// case "mysql":
+		// 	err = mysqldb.InteractiveSetup(db_config)
+		// case "pgsql":
+		// 	err = pgsqldb.InteractiveSetup(db_config)
+		// case "mssql":
+		// 	err = mssqldb.InteractiveSetup(db_config)
+		// }
+		// if err != nil {
+		// 	if !strings.Contains(err.Error(), "EOF") {
+		// 		fmt.Printf("Error: %s\n", err)
+		// 	}
+		// 	fmt.Println()
+		// 	return
+		// }
+		// fmt.Println()
 
+		// // initialize database
+		// if err := run_initialize(db); err != nil {
+		// 	fmt.Printf("Error: %s\n", err)
+		// }
+		// fmt.Println()
+
+		log.Info("done")
 		return
 	}
 
-	if err := run_operations(db); err != nil {
-		log.Info("Error: %s\n", err)
-		return
-	}
+	// if err := run_operations(db); err != nil {
+	// 	log.Info("Error: %s\n", err)
+	// 	return
+	// }
 
 	log.Info("done")
 }
