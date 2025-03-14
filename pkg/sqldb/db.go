@@ -16,12 +16,15 @@ import (
 type Engine interface {
 	// Backend returns the engine backend type.
 	Backend() string
+
 	// SqlDB returns a backend driver handler.
 	SqlDB() (*sql.DB, error)
 	// Release the backend driver handler.
 	Release(*sql.DB) error
+
 	// CanRetryErr checks weather an operation error type can be retried.
 	CanRetryErr(err error) bool
+
 	// SqlGenerator returns the engine SQL statment generator.
 	SqlGenerator() SqlGenerator
 }
@@ -86,10 +89,9 @@ func (db *Database) Backend() string {
 	return ""
 }
 
-// Session returns a new session object.
-func (db *Database) Session() *Session {
-	s, _ := NewSession(db)
-	return s
+// Session returns a new session handler.
+func (db *Database) Session() Session {
+	return newSession(db)
 }
 
 // Ping checks if database connection is active.

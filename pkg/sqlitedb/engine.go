@@ -129,12 +129,12 @@ type SqlGenerator struct {
 
 // Schema generates table schema statments from metainfo
 func (g *SqlGenerator) Schema(tablename string, meta *sqldb.TableMeta) []string {
-	buff := g.StdSqlGenerator.Schema(tablename, meta)
+	stmts := g.StdSqlGenerator.Schema(tablename, meta)
 	if dictx.Fetch(meta.Args, "without_rowid", false) {
-		s := strings.TrimSuffix(strings.TrimSpace(buff[0]), ";")
-		buff[0] = s + " WITHOUT ROWID;"
+		s := strings.TrimSuffix(strings.TrimSpace(stmts[0]), ";")
+		stmts[0] = s + " WITHOUT ROWID;"
 	}
-	return buff
+	return stmts
 }
 
 // SqlGenerator returns the engine SQL statment generator.

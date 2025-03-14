@@ -50,14 +50,14 @@ var Job *job = &job{sqldb.BaseModel{
 type jobMeta struct{ sqldb.BaseModelMeta }
 
 var JobMeta *jobMeta = &jobMeta{sqldb.BaseModelMeta{
-	Columns: []sqldb.TableColumn{
+	Columns: []sqldb.ColumnMeta{
 		{Name: "title", Type: "VARCHAR(128) NOT NULL",
 			Unique: true, Index: true},
 		{Name: "description", Type: "TEXT"},
 		{Name: "access_level", Type: "INTEGER"},
 		{Name: "high_management", Type: "BOOLEAN DEFAULT false"},
 	},
-	Constraints: []sqldb.TableConstraint{
+	Constraints: []sqldb.ConstraintMeta{
 		{Definition: "CHECK (access_level>=0 AND access_level<=5)"},
 	},
 	AutoGuid: true,
@@ -108,14 +108,14 @@ var Employee *employee = &employee{sqldb.BaseModel{
 type employeeMeta struct{ sqldb.BaseModelMeta }
 
 var EmployeeMeta *employeeMeta = &employeeMeta{sqldb.BaseModelMeta{
-	Columns: []sqldb.TableColumn{
+	Columns: []sqldb.ColumnMeta{
 		{Name: "fullname", Type: "VARCHAR(128) NOT NULL",
 			Unique: true, Index: true},
 		{Name: "email", Type: "VARCHAR(256)"},
 		{Name: "active", Type: "BOOLEAN DEFAULT true"},
 		{Name: "job_guid", Type: "VARCHAR(32) NOT NULL"},
 	},
-	Constraints: []sqldb.TableConstraint{
+	Constraints: []sqldb.ConstraintMeta{
 		{Definition: "FOREIGN KEY (job_guid) REFERENCES jobs (guid) " +
 			"ON UPDATE CASCADE ON DELETE RESTRICT"},
 	},

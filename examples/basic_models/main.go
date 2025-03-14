@@ -41,16 +41,16 @@ var Group = &group{sqldb.BaseModel{
 	AutoGuid:      true,
 }}
 
-func (m *group) ModelMeta() *sqldb.TableMeta {
+func (m *group) TableMeta() *sqldb.TableMeta {
 	return &sqldb.TableMeta{
-		Columns: []sqldb.TableColumn{
+		Columns: []sqldb.ColumnMeta{
 			{Name: "title", Type: "VARCHAR(128) NOT NULL",
 				Unique: true, Index: true},
 			{Name: "description", Type: "TEXT"},
 			{Name: "access_level", Type: "INTEGER"},
 			{Name: "public_join", Type: "BOOLEAN DEFAULT false"},
 		},
-		Constraints: []sqldb.TableConstraint{
+		Constraints: []sqldb.ConstraintMeta{
 			{Definition: "CHECK (access_level>=1 AND access_level<=5)"},
 		},
 		AutoGuid: true,
@@ -60,48 +60,41 @@ func (m *group) ModelMeta() *sqldb.TableMeta {
 	}
 }
 
-func (m *group) CreateIfNotExist(dbs *sqldb.Session, data sqldb.Data) error {
-	title := dictx.GetString(data, "title", "")
-	if title == "" {
-		return errors.New("invalid data, empty 'title' value")
+func (m *group) InitialData(dbs sqldb.Session, _ string) error {
+	buff := []sqldb.Data{
+		{
+			"title":        "managers",
+			"description":  "company managers",
+			"access_level": 5,
+			"public_join":  false,
+		}, {
+			"title":        "employees",
+			"description":  "all company employees",
+			"access_level": 3,
+			"public_join":  false,
+		}, {
+			"title":        "visitors",
+			"description":  "company guests and visitors",
+			"access_level": 1,
+			"public_join":  true,
+		},
 	}
 
-	// check if already exists
-	n, err := dbs.Query(Group).FilterBy("title", title).Count()
-	if err != nil {
-		return err
-	} else if n > 0 {
-		return nil
-	}
-
-	// create new entry
-	_, err = dbs.Query(Group).Insert(data)
-	return err
-}
-
-func (m *group) InitialData(dbs *sqldb.Session, _ string) error {
-	groups := []sqldb.Data{{
-		"title":        "managers",
-		"description":  "company managers",
-		"access_level": 5,
-		"public_join":  false,
-	}, {
-		"title":        "employees",
-		"description":  "all company employees",
-		"access_level": 3,
-		"public_join":  false,
-	}, {
-		"title":        "visitors",
-		"description":  "company guests and visitors",
-		"access_level": 1,
-		"public_join":  true,
-	}}
-
-	for _, data := range groups {
-		if err := m.CreateIfNotExist(dbs, data); err != nil {
+	for _, v := range buff {
+		// check if already exists
+		if n, err := dbs.Query(Group).
+			FilterBy("title", v["title"]).Count(); err != nil {
+			return err
+		} else if n > 0 {
+			continue
+		}
+		// create new entry
+		_, err := dbs.Query(Group).Insert(v)
+		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -113,16 +106,16 @@ var Person *person = &person{sqldb.BaseModel{
 	AutoGuid:      true,
 }}
 
-func (m *person) ModelMeta() *sqldb.TableMeta {
+func (m *person) TableMeta() *sqldb.TableMeta {
 	return &sqldb.TableMeta{
-		Columns: []sqldb.TableColumn{
+		Columns: []sqldb.ColumnMeta{
 			{Name: "name", Type: "VARCHAR(128) NOT NULL",
 				Unique: true, Index: true},
 			{Name: "email", Type: "VARCHAR(256)"},
 			{Name: "active", Type: "BOOLEAN DEFAULT true"},
 			{Name: "group_guid", Type: "VARCHAR(32) NOT NULL"},
 		},
-		Constraints: []sqldb.TableConstraint{
+		Constraints: []sqldb.ConstraintMeta{
 			{Definition: "FOREIGN KEY (group_guid) REFERENCES groups (guid) " +
 				"ON UPDATE CASCADE ON DELETE RESTRICT"},
 		},
@@ -133,40 +126,7 @@ func (m *person) ModelMeta() *sqldb.TableMeta {
 	}
 }
 
-func (m *person) CreateIfNotExist(dbs *sqldb.Session, data sqldb.Data) error {
-	name := dictx.GetString(data, "name", "")
-	if name == "" {
-		return errors.New("invalid data, empty 'name' value")
-	}
-
-	// check if already exists
-	n, err := dbs.Query(Person).FilterBy("name", name).Count()
-	if err != nil {
-		return err
-	} else if n > 0 {
-		return nil
-	}
-
-	// check and get group
-	grp_title := dictx.GetString(data, "group", "")
-	if grp_title == "" {
-		return errors.New("invalid data, empty 'group' value")
-	}
-	grp, err := dbs.Query(Group).FilterBy("title", grp_title).One()
-	if err != nil {
-		return err
-	} else if grp == nil {
-		return fmt.Errorf("group not found: %s", grp_title)
-	}
-
-	// create new entry
-	data["group_guid"] = grp["guid"]
-	delete(data, "group")
-	_, err = dbs.Query(Person).Insert(data)
-	return err
-}
-
-func (m *person) InitialData(dbs *sqldb.Session, _ string) error {
+func (m *person) InitialData(dbs sqldb.Session, _ string) error {
 	persons := []sqldb.Data{{
 		"name":   "Manager",
 		"email":  "manager@company.com",
@@ -185,10 +145,37 @@ func (m *person) InitialData(dbs *sqldb.Session, _ string) error {
 	}}
 
 	for _, data := range persons {
-		if err := m.CreateIfNotExist(dbs, data); err != nil {
-			return err
+		// check if already exists
+		if name := dictx.GetString(data, "name", ""); name == "" {
+			return errors.New("invalid data, empty 'name' value")
+		} else {
+			if n, err := dbs.Query(Person).
+				FilterBy("name", name).Count(); err != nil {
+				return err
+			} else if n > 0 {
+				continue
+			}
 		}
+
+		// check and get group
+		grp_title := dictx.GetString(data, "group", "")
+		if grp_title == "" {
+			return errors.New("invalid data, empty 'group' value")
+		}
+		grp, err := dbs.Query(Group).FilterBy("title", grp_title).One()
+		if err != nil {
+			return err
+		} else if grp == nil {
+			return fmt.Errorf("group not found: %s", grp_title)
+		}
+
+		// create new entry
+		data["group_guid"] = grp["guid"]
+		delete(data, "group")
+		_, err = dbs.Query(Person).Insert(data)
+		return err
 	}
+
 	return nil
 }
 
@@ -206,7 +193,7 @@ func (m *person) InitialData(dbs *sqldb.Session, _ string) error {
 // }
 
 func run_initialize(db *sqldb.Database) error {
-	metainfo := []sqldb.ModelsMeta{
+	metainfo := []sqldb.ModelMeta{
 		{Table: Group.DefaultTable, Model: Group},
 		{Table: Person.DefaultTable, Model: Person},
 	}

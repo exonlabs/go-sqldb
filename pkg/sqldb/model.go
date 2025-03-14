@@ -4,10 +4,12 @@
 
 package sqldb
 
+import "strings"
+
 // Model defines the model interface.
 type Model interface {
-	// ModelMeta returns the model table metainfo.
-	ModelMeta() *TableMeta
+	// TableMeta returns the model table metainfo.
+	TableMeta() *TableMeta
 
 	// TableName returns the table name to use in statments.
 	TableName() string
@@ -15,6 +17,8 @@ type Model interface {
 	Columns() []string
 	// Orders returns the table order-by columns to use in statments.
 	Orders() []string
+	// Limit returns the number of rows to fetch in statments.
+	Limit() int
 	// IsAutoGuid returns true if the AutoGuid operations are enabled.
 	IsAutoGuid() bool
 	// DataEncode applies encoding to data before writing to database.
@@ -22,12 +26,19 @@ type Model interface {
 	// DataDecode applies decoding on data after reading from database.
 	DataDecode([]Data) error
 
-	// CreateSchema creates the table schema in database.
-	CreateSchema(dbs *Session, tablename string) error
-	// AlterSchema modifies the table schema in database.
-	AlterSchema(dbs *Session, tablename string) error
+	// PreSchema is called before creating the table schema in database.
+	PreSchema(dbs *session, meta *ModelMeta) error
+	// PostSchema is called after creating the table schema in database.
+	PostSchema(dbs *session, meta *ModelMeta) error
+
 	// InitialData creates the initial data in table.
-	InitialData(dbs *Session, tablename string) error
+	InitialData(dbs *session, tablename string) error
+}
+
+// ModelMeta represents link between tablename and table metainfo.
+type ModelMeta struct {
+	Table string
+	Model Model
 }
 
 // BaseModel defines a base model structure.
@@ -40,6 +51,8 @@ type BaseModel struct {
 	// DefaultOrders defines the default orders to use in statments.
 	// columns in this list should be present in DefaultColumns.
 	DefaultOrders []string
+	// DefaultLimit defines the default limit to use in statments.
+	DefaultLimit int
 	// AutoGuid enables the auto guid operations: which are to create new guid
 	// for inserts and prevent guid column change in updates.
 	AutoGuid bool
@@ -55,9 +68,14 @@ func (m *BaseModel) Columns() []string {
 	return m.DefaultColumns
 }
 
-// Orders returns the table order by columns to use in statments.
+// Orders returns the table order-by columns to use in statments.
 func (m *BaseModel) Orders() []string {
 	return m.DefaultOrders
+}
+
+// Limit returns the number of rows to fetch in statments.
+func (m *BaseModel) Limit() int {
+	return m.DefaultLimit
 }
 
 // IsAutoGuid returns true if the AutoGuid operations are enabled.
@@ -75,43 +93,26 @@ func (m *BaseModel) DataDecode([]Data) error {
 	return nil
 }
 
-// CreateSchema creates the table schema in database.
-func (m *BaseModel) CreateSchema(dbs *Session, tablename string) error {
-	// if s.db.Engine == nil {
-	// 	return ErrDBEngine
-	// }
-
-	if dbs.db.Log != nil {
-		dbs.db.Log.Debug("creating schema for table: %s", tablename)
-	}
-	// schema := s.db.Engine.GenSchema(tablename, (*TableMeta)(m))
-
-	// _, err := s.Execute(schema)
-	// return err
+// PreSchema is called before creating the table schema in database.
+func (m *BaseModel) PreSchema(dbs *session, meta *ModelMeta) error {
 	return nil
 }
 
-// AlterSchema modifies the table schema in database.
-func (m *BaseModel) AlterSchema(dbs *Session, tablename string) error {
+// PostSchema is called after creating the table schema in database.
+func (m *BaseModel) PostSchema(dbs *session, meta *ModelMeta) error {
 	return nil
 }
 
 // InitialData creates the initial data in table.
-func (m *BaseModel) InitialData(dbs *Session, tablename string) error {
+func (m *BaseModel) InitialData(dbs *session, tablename string) error {
 	return nil
 }
 
 ////////////////////////////////////////////////////
 
-// ModelsMeta represents link between table name and model metainfo.
-type ModelsMeta struct {
-	Table string
-	Model Model
-}
-
 // InitializeModels creates and alter the database models schema,
 // then adds the models intial data.
-func InitializeModels(db *Database, metainfo []ModelsMeta) error {
+func InitializeModels(db *Database, metainfo []ModelMeta) error {
 	if db == nil {
 		return ErrDBHandler
 	} else if db.engine == nil {
@@ -123,25 +124,32 @@ func InitializeModels(db *Database, metainfo []ModelsMeta) error {
 
 	// create and alter schema
 	if db.Log != nil {
-		db.Log.Debug("creating tables schema")
+		db.Log.Debug("creating models schema")
 	}
-	for _, v := range metainfo {
-		if err := v.Model.CreateSchema(dbs, v.Table); err != nil {
+	for _, meta := range metainfo {
+		if err := meta.Model.PreSchema(dbs, &meta); err != nil {
 			return err
 		}
 	}
-	for _, v := range metainfo {
-		if err := v.Model.AlterSchema(dbs, v.Table); err != nil {
+	for _, meta := range metainfo {
+		stmts := dbs.db.engine.SqlGenerator().
+			Schema(meta.Table, meta.Model.TableMeta())
+		if _, err := dbs.Exec(strings.Join(stmts, "\n")); err != nil {
+			return err
+		}
+	}
+	for _, meta := range metainfo {
+		if err := meta.Model.PostSchema(dbs, &meta); err != nil {
 			return err
 		}
 	}
 
 	// add intial data to tables
 	if db.Log != nil {
-		db.Log.Debug("adding tables initial data")
+		db.Log.Debug("adding models initial data")
 	}
-	for _, v := range metainfo {
-		if err := v.Model.InitialData(dbs, v.Table); err != nil {
+	for _, meta := range metainfo {
+		if err := meta.Model.InitialData(dbs, meta.Table); err != nil {
 			return err
 		}
 	}

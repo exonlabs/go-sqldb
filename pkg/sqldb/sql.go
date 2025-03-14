@@ -11,6 +11,29 @@ import (
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 )
 
+// SQL Statment placeholder for variables.
+const SQL_PLACEHOLDER = "?"
+
+// Data represents the table data. where each row is represented
+// into a map for columns as keys and data as values.
+type Data = map[string]any
+
+////////////////////////////////////////////////////
+
+// StmtAttrs represents the SQL statment attributes.
+type StmtAttrs struct {
+	Tablename   string
+	Columns     []string
+	Filters     string
+	FiltersArgs []any
+	Groupby     []string
+	Orderby     []string
+	Having      string
+	HavingArgs  []any
+	Offset      int
+	Limit       int
+}
+
 // ColumnMeta represents column definition.
 //
 // References:
@@ -67,27 +90,6 @@ type TableMeta struct {
 }
 
 ////////////////////////////////////////////////////
-
-// SQL Statment placeholder for variables.
-const SQL_PLACEHOLDER = "?"
-
-// StmtAttrs represents the SQL statment attributes.
-type StmtAttrs struct {
-	Tablename   string
-	Columns     []string
-	Filters     string
-	FiltersArgs []any
-	Groupby     []string
-	Orderby     []string
-	Having      string
-	HavingArgs  []any
-	Offset      int
-	Limit       int
-}
-
-// Data represents the table data. where each row is represented
-// into a map for columns as keys and data as values.
-type Data = map[string]any
 
 // SqlGenerator interface defines SQL statments generator.
 type SqlGenerator interface {

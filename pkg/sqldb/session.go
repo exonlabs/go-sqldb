@@ -13,8 +13,38 @@ import (
 	"github.com/exonlabs/go-utils/pkg/events"
 )
 
-// Session represents a standard database session.
-type Session struct {
+// Session interface
+type Session interface {
+	// Database returns the associated database handler.
+	Database() *Database
+	// Query returns a new query handler.
+	Query(model Model) Query
+
+	// // Open the backend connection.
+	// Open() error
+	// // Close the backend connection.
+	// Close()
+	// // Ping checks if the backend connection is active.
+	// Ping() bool
+	// Cancel breaks all active session operation.
+	Cancel()
+
+	// Begin starts a new transactional scope.
+	Begin() error
+	// Commit runs a commit action in transactional scope.
+	Commit() error
+	// RollBack runs a rollback action in transactional scope.
+	RollBack() error
+	// Exec runs a query without returning any rows. it takes the statment
+	// to run and the args are for any placeholder parameters in the query.
+	Exec(stmt string, params ...any) (int, error)
+	// Fetch runs a query that returns rows. it takes the statment
+	// to run and the args are for any placeholder parameters in the query.
+	Fetch(stmt string, params ...any) ([]Data, error)
+}
+
+// session represents a standard database session.
+type session struct {
 	// database handler
 	db *Database
 
@@ -27,25 +57,30 @@ type Session struct {
 	ctxBreak   context.CancelFunc
 }
 
-// NewSession creates new database session.
-func NewSession(db *Database) (*Session, error) {
+// newSession creates new database session.
+func newSession(db *Database) (*session, error) {
 	if db == nil {
 		return nil, ErrDBHandler
 	}
-	return &Session{
+	return &session{
 		db:         db,
 		breakEvent: events.New(),
 	}, nil
 }
 
+// Database returns the associated database handler
+func (s *session) Database() *Database {
+	return s.db
+}
+
 // Query returns a database query handler.
-func (s *Session) Query(model Model) *Query {
-	q, _ := NewQuery(s, model)
-	return q
+func (s *session) Query(model Model) Query {
+	return newQuery(s, model)
+
 }
 
 // Ping checks if the backend connection is active.
-func (s *Session) Ping() bool {
+func (s *session) Ping() bool {
 	if s.db != nil {
 		return s.db.Ping()
 	}
@@ -53,7 +88,7 @@ func (s *Session) Ping() bool {
 }
 
 // Cancel breaks all active session operation.
-func (s *Session) Cancel() {
+func (s *session) Cancel() {
 	s.breakEvent.Set()
 	if s.ctxBreak != nil {
 		s.ctxBreak()
@@ -61,7 +96,7 @@ func (s *Session) Cancel() {
 }
 
 // Begin starts a new transactional scope.
-func (s *Session) Begin() error {
+func (s *session) Begin() error {
 	// already in transaction
 	if s.sqlDB != nil && s.sqlTX != nil {
 		return nil
@@ -92,7 +127,7 @@ func (s *Session) Begin() error {
 }
 
 // Commit runs a commit action in transactional scope.
-func (s *Session) Commit() error {
+func (s *session) Commit() error {
 	// not in transaction
 	if s.sqlDB == nil || s.sqlTX == nil {
 		return fmt.Errorf("%w - not in transaction", ErrOperation)
@@ -115,7 +150,7 @@ func (s *Session) Commit() error {
 }
 
 // RollBack runs a rollback action in transactional scope.
-func (s *Session) RollBack() error {
+func (s *session) RollBack() error {
 	// not in transaction
 	if s.sqlDB == nil || s.sqlTX == nil {
 		return fmt.Errorf("%w - not in transaction", ErrOperation)
@@ -139,7 +174,7 @@ func (s *Session) RollBack() error {
 
 // Exec runs a query without returning any rows. it takes the statment
 // to run and the args are for any placeholder parameters in the query.
-func (s *Session) Exec(stmt string, params ...any) (int, error) {
+func (s *session) Exec(stmt string, params ...any) (int, error) {
 	if s.db == nil {
 		return 0, ErrDBHandler
 	} else if s.db.engine == nil {
@@ -196,7 +231,7 @@ func (s *Session) Exec(stmt string, params ...any) (int, error) {
 
 // Fetch runs a query that returns rows. it takes the statment
 // to run and the args are for any placeholder parameters in the query.
-func (s *Session) Fetch(stmt string, params ...any) ([]Data, error) {
+func (s *session) Fetch(stmt string, params ...any) ([]Data, error) {
 	if s.db == nil {
 		return nil, ErrDBHandler
 	} else if s.db.engine == nil {
