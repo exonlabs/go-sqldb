@@ -60,7 +60,7 @@ func (m *group) TableMeta() *sqldb.TableMeta {
 	}
 }
 
-func (m *group) InitialData(dbs sqldb.Session, _ string) error {
+func (m *group) InitialData(dbs *sqldb.Session, _ string) error {
 	buff := []sqldb.Data{
 		{
 			"title":        "managers",
@@ -126,23 +126,25 @@ func (m *person) TableMeta() *sqldb.TableMeta {
 	}
 }
 
-func (m *person) InitialData(dbs sqldb.Session, _ string) error {
-	persons := []sqldb.Data{{
-		"name":   "Manager",
-		"email":  "manager@company.com",
-		"active": true,
-		"group":  "managers",
-	}, {
-		"name":   "Employee",
-		"email":  "employee@company.com",
-		"active": true,
-		"group":  "employees",
-	}, {
-		"name":   "Guest",
-		"email":  "",
-		"active": false,
-		"group":  "visitors",
-	}}
+func (m *person) InitialData(dbs *sqldb.Session, _ string) error {
+	persons := []sqldb.Data{
+		{
+			"name":   "Manager",
+			"email":  "manager@company.com",
+			"active": true,
+			"group":  "managers",
+		}, {
+			"name":   "Employee",
+			"email":  "employee@company.com",
+			"active": true,
+			"group":  "employees",
+		}, {
+			"name":   "Guest",
+			"email":  "",
+			"active": false,
+			"group":  "visitors",
+		},
+	}
 
 	for _, data := range persons {
 		// check if already exists
@@ -173,7 +175,9 @@ func (m *person) InitialData(dbs sqldb.Session, _ string) error {
 		data["group_guid"] = grp["guid"]
 		delete(data, "group")
 		_, err = dbs.Query(Person).Insert(data)
-		return err
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -338,11 +342,7 @@ func main() {
 	}
 
 	// create database handler
-	db, err := sqldb.NewDatabase(dblog, engine, db_config)
-	if err != nil {
-		log.Error("create database handler failed - %s", err)
-		return
-	}
+	db := sqldb.NewDatabase(dblog, engine, db_config)
 	defer db.Shutdown()
 
 	// setup database

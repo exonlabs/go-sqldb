@@ -6,6 +6,7 @@ package sqlitedb
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -15,56 +16,41 @@ import (
 	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
-// Config represents the database configuration params.
-type Config struct {
-	// database path
-	Database string
-	// disable Foreign Keys restriction
-	NoForeignKeys bool
-	// disable Auto Vacuum mode
-	NoAutoVacuum bool
-	// disable WAL Journal mode
-	NoJournalWAL bool
+// open creates new backend driver handler.
+func open(cfg *Config) (*sql.DB, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("empty config")
+	}
+	return sql.Open("sqlite3", cfg.DSN())
 }
 
-// InitConfig initializes configuration from configuration dict.
-// it checks and returns error if not all options have valid values.
-//
-// The parsed options are:
-//   - database: (string) the database file path - REQUIRED
-//   - no_foreign_keys: (bool) disable Foreign Keys restriction
-//   - no_auto_vacuum: (bool) disable Auto Vacuum mode
-//   - no_journal_wal: (bool) disable WAL Journal mode
-func (cfg *Config) InitConfig(d dictx.Dict) error {
-	cfg.Database = dictx.GetString(d, "database", "")
-	cfg.NoForeignKeys = dictx.Fetch(d, "no_foreign_keys", false)
-	cfg.NoAutoVacuum = dictx.Fetch(d, "no_auto_vacuum", false)
-	cfg.NoJournalWAL = dictx.Fetch(d, "no_journal_wal", false)
-
-	// validations
-	if cfg.Database == "" {
-		return sqldb.ErrDBPath
+// close shutsdown the backend driver handler.
+func close(sdb *sql.DB) error {
+	if sdb != nil {
+		return sdb.Close()
 	}
-
 	return nil
 }
 
 // Engine represents the backend engine structure.
 type Engine struct {
-	// engine config
-	config *Config
-	// sql driver
-	sqlDB *sql.DB
+	cfg *Config
+	sdb *sql.DB
 }
 
 // NewEngine creates new engine handler for the backend.
 func NewEngine(opts dictx.Dict) (*Engine, error) {
-	cfg := &Config{}
-	if err := cfg.InitConfig(opts); err != nil {
+	cfg, err := NewConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+	sdb, err := open(cfg)
+	if err != nil {
 		return nil, err
 	}
 	return &Engine{
-		config: cfg,
+		cfg: cfg,
+		sdb: sdb,
 	}, nil
 }
 
@@ -73,40 +59,15 @@ func (e *Engine) Backend() string {
 	return "sqlite"
 }
 
-// SqlDB returns a backend driver handler.
+// SqlDB create or return existing backend driver handler.
 func (e *Engine) SqlDB() (*sql.DB, error) {
-	if e.sqlDB == nil {
-		if e.config == nil {
-			return nil, sqldb.ErrDBConfig
-		}
-
-		args := []string{}
-		if e.config.NoForeignKeys {
-			args = append(args, "_foreign_keys=0")
-		} else {
-			args = append(args, "_foreign_keys=1")
-		}
-		if !e.config.NoAutoVacuum {
-			args = append(args, "_auto_vacuum=1")
-		}
-		// if !e.config.NoJournalWAL {
-		// 	args = append(args, "_journal_mode=WAL")
-		// }
-
-		dsn := fmt.Sprintf("%s?%s",
-			e.config.Database, strings.Join(args, "&"))
-
-		if v, err := sql.Open("sqlite3", dsn); err != nil {
-			return nil, fmt.Errorf("%w - %v", sqldb.ErrOpen, err)
-		} else {
-			e.sqlDB = v
-		}
+	if e.sdb == nil {
+		return nil, errors.New("no engine driver handler")
 	}
-
-	return e.sqlDB, nil
+	return e.sdb, nil
 }
 
-// Release the backend driver handler.
+// Release frees the backend driver resources between sessions.
 func (e *Engine) Release(_ *sql.DB) error {
 	// nothing to do
 	return nil

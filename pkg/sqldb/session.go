@@ -13,160 +13,148 @@ import (
 	"github.com/exonlabs/go-utils/pkg/events"
 )
 
-// Session interface
-type Session interface {
-	// Database returns the associated database handler.
-	Database() *Database
-	// Query returns a new query handler.
-	Query(model Model) Query
-
-	// // Open the backend connection.
-	// Open() error
-	// // Close the backend connection.
-	// Close()
-	// // Ping checks if the backend connection is active.
-	// Ping() bool
-	// Cancel breaks all active session operation.
-	Cancel()
-
-	// Begin starts a new transactional scope.
-	Begin() error
-	// Commit runs a commit action in transactional scope.
-	Commit() error
-	// RollBack runs a rollback action in transactional scope.
-	RollBack() error
-	// Exec runs a query without returning any rows. it takes the statment
-	// to run and the args are for any placeholder parameters in the query.
-	Exec(stmt string, params ...any) (int, error)
-	// Fetch runs a query that returns rows. it takes the statment
-	// to run and the args are for any placeholder parameters in the query.
-	Fetch(stmt string, params ...any) ([]Data, error)
-}
-
-// session represents a standard database session.
-type session struct {
+// Session represents a standard database Session.
+type Session struct {
 	// database handler
 	db *Database
 
 	// sql driver and transactioin handlers
-	sqlDB *sql.DB
-	sqlTX *sql.Tx
+	sdb *sql.DB
+	stx *sql.Tx
 
 	// break event and context-cancel
 	breakEvent *events.Event
 	ctxBreak   context.CancelFunc
+
+	// OperationTimeout sets the timeout in seconds for operations.
+	// use 0 or negative value to disable operation timeout. (default 5.0 sec)
+	OperationTimeout float64
+	// RetryInterval sets the interval in seconds between operation retries.
+	// trials are done untill operation is done or timeout is reached.
+	// retry interval value must be > 0. (default 0.1 sec)
+	RetryInterval float64
 }
 
-// newSession creates new database session.
-func newSession(db *Database) (*session, error) {
-	if db == nil {
-		return nil, ErrDBHandler
-	}
-	return &session{
+// NewSession creates new database session.
+func NewSession(db *Database) *Session {
+	s := &Session{
 		db:         db,
 		breakEvent: events.New(),
-	}, nil
+	}
+	if db != nil {
+		s.OperationTimeout = db.OperationTimeout
+		s.RetryInterval = db.RetryInterval
+	}
+	return s
 }
 
 // Database returns the associated database handler
-func (s *session) Database() *Database {
+func (s *Session) Database() *Database {
 	return s.db
 }
 
 // Query returns a database query handler.
-func (s *session) Query(model Model) Query {
-	return newQuery(s, model)
-
+func (s *Session) Query(model Model) *Query {
+	return NewQuery(s, model)
 }
 
 // Ping checks if the backend connection is active.
-func (s *session) Ping() bool {
-	if s.db != nil {
-		return s.db.Ping()
+func (s *Session) Ping() bool {
+	if s.sdb != nil {
+		return s.sdb.Ping() == nil
 	}
-	return false
+	return s.db.Ping()
 }
 
 // Cancel breaks all active session operation.
-func (s *session) Cancel() {
+func (s *Session) Cancel() {
 	s.breakEvent.Set()
 	if s.ctxBreak != nil {
 		s.ctxBreak()
 	}
 }
 
+// check attrs before running query
+func (s *Session) check_run() error {
+	if s.db == nil {
+		return ErrDBHandler
+	}
+	return s.db.check_run()
+}
+
 // Begin starts a new transactional scope.
-func (s *session) Begin() error {
+func (s *Session) Begin() error {
 	// already in transaction
-	if s.sqlDB != nil && s.sqlTX != nil {
+	if s.sdb != nil && s.stx != nil {
 		return nil
 	}
 
-	if s.db == nil {
-		return ErrDBHandler
-	} else if s.db.engine == nil {
-		return ErrDBEngine
+	if err := s.check_run(); err != nil {
+		return err
 	}
 
 	if sdb, err := s.db.engine.SqlDB(); err != nil {
-		return fmt.Errorf("%w - %v", ErrOperation, err)
+		return fmt.Errorf("%w - %v", ErrOpen, err)
 	} else {
-		s.sqlDB = sdb
+		s.sdb = sdb
 	}
 
 	if s.db.Log != nil {
 		s.db.Log.Trace("begin new transaction")
 	}
-
-	if tx, err := s.sqlDB.Begin(); err != nil {
+	if stx, err := s.sdb.Begin(); err != nil {
 		return fmt.Errorf("%w - %v", ErrOperation, err)
 	} else {
-		s.sqlTX = tx
+		s.stx = stx
 	}
 	return nil
 }
 
 // Commit runs a commit action in transactional scope.
-func (s *session) Commit() error {
+func (s *Session) Commit() error {
 	// not in transaction
-	if s.sqlDB == nil || s.sqlTX == nil {
+	if s.sdb == nil || s.stx == nil {
 		return fmt.Errorf("%w - not in transaction", ErrOperation)
 	}
 
+	if err := s.check_run(); err != nil {
+		return err
+	}
+
 	defer func() {
-		s.db.engine.Release(s.sqlDB)
-		s.sqlDB = nil
-		s.sqlTX = nil
+		s.db.engine.Release(s.sdb)
+		s.sdb, s.stx = nil, nil
 	}()
 
 	if s.db.Log != nil {
 		s.db.Log.Trace("transaction commit")
 	}
-
-	if err := s.sqlTX.Commit(); err != nil {
+	if err := s.stx.Commit(); err != nil {
 		return fmt.Errorf("%w - %v", ErrOperation, err)
 	}
 	return nil
 }
 
 // RollBack runs a rollback action in transactional scope.
-func (s *session) RollBack() error {
+func (s *Session) RollBack() error {
 	// not in transaction
-	if s.sqlDB == nil || s.sqlTX == nil {
+	if s.sdb == nil || s.stx == nil {
 		return fmt.Errorf("%w - not in transaction", ErrOperation)
 	}
 
+	if err := s.check_run(); err != nil {
+		return err
+	}
+
 	defer func() {
-		s.db.engine.Release(s.sqlDB)
-		s.sqlDB = nil
-		s.sqlTX = nil
+		s.db.engine.Release(s.sdb)
+		s.sdb, s.stx = nil, nil
 	}()
 
 	if s.db.Log != nil {
 		s.db.Log.Trace("transaction rollback")
 	}
-
-	if err := s.sqlTX.Rollback(); err != nil {
+	if err := s.stx.Rollback(); err != nil {
 		return fmt.Errorf("%w - %v", ErrOperation, err)
 	}
 	return nil
@@ -174,11 +162,9 @@ func (s *session) RollBack() error {
 
 // Exec runs a query without returning any rows. it takes the statment
 // to run and the args are for any placeholder parameters in the query.
-func (s *session) Exec(stmt string, params ...any) (int, error) {
-	if s.db == nil {
-		return 0, ErrDBHandler
-	} else if s.db.engine == nil {
-		return 0, ErrDBEngine
+func (s *Session) Exec(stmt string, params ...any) (int, error) {
+	if err := s.check_run(); err != nil {
+		return 0, err
 	}
 
 	if s.db.Log != nil {
@@ -186,32 +172,32 @@ func (s *session) Exec(stmt string, params ...any) (int, error) {
 	}
 
 	var err error
-	var sqldb *sql.DB
+	var sdb *sql.DB
 	var ctx context.Context
 	var res sql.Result
 
 	// not in transaction
-	if s.sqlDB == nil || s.sqlTX == nil {
-		if sqldb, err = s.db.engine.SqlDB(); err != nil {
-			return 0, fmt.Errorf("%w - %v", ErrOperation, err)
+	if s.sdb == nil || s.stx == nil {
+		if sdb, err = s.db.engine.SqlDB(); err != nil {
+			return 0, fmt.Errorf("%w - %v", ErrOpen, err)
 		}
-		defer s.db.engine.Release(sqldb)
+		defer s.db.engine.Release(sdb)
 	}
 
 	s.breakEvent.Clear()
-	if s.db.OperationTimeout > 0 {
+	if s.OperationTimeout > 0 {
 		ctx, s.ctxBreak = context.WithDeadline(s.db.ctx, time.Now().Add(
-			time.Duration(s.db.OperationTimeout*float64(time.Second))))
+			time.Duration(s.OperationTimeout*float64(time.Second))))
 	} else {
 		ctx, s.ctxBreak = context.WithCancel(s.db.ctx)
 	}
 	defer s.ctxBreak()
 
 	for {
-		if s.sqlDB != nil && s.sqlTX != nil {
-			res, err = s.sqlTX.ExecContext(ctx, stmt, params...)
+		if s.sdb != nil && s.stx != nil {
+			res, err = s.stx.ExecContext(ctx, stmt, params...)
 		} else {
-			res, err = sqldb.ExecContext(ctx, stmt, params...)
+			res, err = sdb.ExecContext(ctx, stmt, params...)
 		}
 		if err == nil {
 			n, err := res.RowsAffected()
@@ -223,7 +209,7 @@ func (s *session) Exec(stmt string, params ...any) (int, error) {
 		} else if !s.db.engine.CanRetryErr(err) {
 			break
 		}
-		s.breakEvent.Wait(s.db.RetryInterval)
+		s.breakEvent.Wait(s.RetryInterval)
 	}
 
 	return 0, fmt.Errorf("%w - %v", ErrOperation, err)
@@ -231,11 +217,9 @@ func (s *session) Exec(stmt string, params ...any) (int, error) {
 
 // Fetch runs a query that returns rows. it takes the statment
 // to run and the args are for any placeholder parameters in the query.
-func (s *session) Fetch(stmt string, params ...any) ([]Data, error) {
-	if s.db == nil {
-		return nil, ErrDBHandler
-	} else if s.db.engine == nil {
-		return nil, ErrDBEngine
+func (s *Session) Fetch(stmt string, params ...any) ([]Data, error) {
+	if err := s.check_run(); err != nil {
+		return nil, err
 	}
 
 	if s.db.Log != nil {
@@ -243,27 +227,27 @@ func (s *session) Fetch(stmt string, params ...any) ([]Data, error) {
 	}
 
 	var err error
-	var sqldb *sql.DB
+	var sdb *sql.DB
 	var ctx context.Context
 	var rows *sql.Rows
 	var colNames []string
 
-	if sqldb, err = s.db.engine.SqlDB(); err != nil {
-		return nil, fmt.Errorf("%w - %v", ErrOperation, err)
+	if sdb, err = s.db.engine.SqlDB(); err != nil {
+		return nil, fmt.Errorf("%w - %v", ErrOpen, err)
 	}
-	defer s.db.engine.Release(sqldb)
+	defer s.db.engine.Release(sdb)
 
 	s.breakEvent.Clear()
-	if s.db.OperationTimeout > 0 {
+	if s.OperationTimeout > 0 {
 		ctx, s.ctxBreak = context.WithDeadline(s.db.ctx, time.Now().Add(
-			time.Duration(s.db.OperationTimeout*float64(time.Second))))
+			time.Duration(s.OperationTimeout*float64(time.Second))))
 	} else {
 		ctx, s.ctxBreak = context.WithCancel(s.db.ctx)
 	}
 	defer s.ctxBreak()
 
 	for {
-		rows, err = sqldb.QueryContext(ctx, stmt, params...)
+		rows, err = sdb.QueryContext(ctx, stmt, params...)
 		if err == nil {
 			defer rows.Close()
 			colNames, err = rows.Columns()
@@ -278,7 +262,7 @@ func (s *session) Fetch(stmt string, params ...any) ([]Data, error) {
 		} else if !s.db.engine.CanRetryErr(err) {
 			return nil, fmt.Errorf("%w - %v", ErrOperation, err)
 		}
-		s.breakEvent.Wait(s.db.RetryInterval)
+		s.breakEvent.Wait(s.RetryInterval)
 	}
 
 	result := []Data{}

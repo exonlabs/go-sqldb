@@ -27,12 +27,12 @@ type Model interface {
 	DataDecode([]Data) error
 
 	// PreSchema is called before creating the table schema in database.
-	PreSchema(dbs *session, meta *ModelMeta) error
+	PreSchema(dbs *Session, meta *ModelMeta) error
 	// PostSchema is called after creating the table schema in database.
-	PostSchema(dbs *session, meta *ModelMeta) error
+	PostSchema(dbs *Session, meta *ModelMeta) error
 
 	// InitialData creates the initial data in table.
-	InitialData(dbs *session, tablename string) error
+	InitialData(dbs *Session, tablename string) error
 }
 
 // ModelMeta represents link between tablename and table metainfo.
@@ -94,17 +94,17 @@ func (m *BaseModel) DataDecode([]Data) error {
 }
 
 // PreSchema is called before creating the table schema in database.
-func (m *BaseModel) PreSchema(dbs *session, meta *ModelMeta) error {
+func (m *BaseModel) PreSchema(dbs *Session, meta *ModelMeta) error {
 	return nil
 }
 
 // PostSchema is called after creating the table schema in database.
-func (m *BaseModel) PostSchema(dbs *session, meta *ModelMeta) error {
+func (m *BaseModel) PostSchema(dbs *Session, meta *ModelMeta) error {
 	return nil
 }
 
 // InitialData creates the initial data in table.
-func (m *BaseModel) InitialData(dbs *session, tablename string) error {
+func (m *BaseModel) InitialData(dbs *Session, tablename string) error {
 	return nil
 }
 
@@ -115,8 +115,6 @@ func (m *BaseModel) InitialData(dbs *session, tablename string) error {
 func InitializeModels(db *Database, metainfo []ModelMeta) error {
 	if db == nil {
 		return ErrDBHandler
-	} else if db.engine == nil {
-		return ErrDBEngine
 	}
 
 	// create new session
@@ -132,7 +130,7 @@ func InitializeModels(db *Database, metainfo []ModelMeta) error {
 		}
 	}
 	for _, meta := range metainfo {
-		stmts := dbs.db.engine.SqlGenerator().
+		stmts := db.engine.SqlGenerator().
 			Schema(meta.Table, meta.Model.TableMeta())
 		if _, err := dbs.Exec(strings.Join(stmts, "\n")); err != nil {
 			return err

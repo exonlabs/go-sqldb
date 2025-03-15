@@ -17,9 +17,9 @@ type Engine interface {
 	// Backend returns the engine backend type.
 	Backend() string
 
-	// SqlDB returns a backend driver handler.
+	// SqlDB create or return existing backend driver handler.
 	SqlDB() (*sql.DB, error)
-	// Release the backend driver handler.
+	// Release frees the backend driver resources between sessions.
 	Release(*sql.DB) error
 
 	// CanRetryErr checks weather an operation error type can be retried.
@@ -44,8 +44,8 @@ type Database struct {
 	// OperationTimeout defines the timeout in seconds for database operation.
 	// use 0 or negative value to disable operation timeout. (default 5.0 sec)
 	OperationTimeout float64
-	// RetryInterval defines the time interval in seconds between operation
-	// retries. trials are done untill operation is done or timeout is reached.
+	// RetryInterval defines the interval in seconds between operation retries.
+	// trials are done untill operation is done or timeout is reached.
 	// retry interval value must be > 0. (default 0.1 sec)
 	RetryInterval float64
 }
@@ -55,14 +55,10 @@ type Database struct {
 // The parsed options are:
 //   - operation_timeout: (float64) the timeout in seconds for database operation.
 //     use 0 or negative value to disable operation timeout. (default 5.0 sec)
-//   - retry_interval: (float64) the time interval in seconds between operation
-//     retries. trials are done untill operation is done or timeout is reached.
+//   - retry_interval: (float64) the interval in seconds between operation retries.
+//     trials are done untill operation is done or timeout is reached.
 //     retry interval value must be > 0. (default 0.1 sec)
-func NewDatabase(log *logging.Logger, engine Engine, opts dictx.Dict) (*Database, error) {
-	if engine == nil {
-		return nil, ErrDBEngine
-	}
-
+func NewDatabase(log *logging.Logger, engine Engine, opts dictx.Dict) *Database {
 	db := &Database{
 		Log:    log,
 		engine: engine,
@@ -78,7 +74,7 @@ func NewDatabase(log *logging.Logger, engine Engine, opts dictx.Dict) (*Database
 		db.RetryInterval = v
 	}
 
-	return db, nil
+	return db
 }
 
 // Backend returns the database backend type.
@@ -89,17 +85,30 @@ func (db *Database) Backend() string {
 	return ""
 }
 
+// check attrs before running query
+func (db *Database) check_run() error {
+	if db.engine == nil {
+		return ErrDBEngine
+	}
+	return nil
+}
+
 // Session returns a new session handler.
-func (db *Database) Session() Session {
-	return newSession(db)
+func (db *Database) Session() *Session {
+	return NewSession(db)
+}
+
+// Query returns a new query handler.
+func (db *Database) Query(model Model) *Query {
+	return NewQuery(NewSession(db), model)
 }
 
 // Ping checks if database connection is active.
 func (db *Database) Ping() bool {
 	if db.engine != nil {
-		if sqldb, err := db.engine.SqlDB(); err == nil {
-			defer db.engine.Release(sqldb)
-			return sqldb.Ping() == nil
+		if sdb, err := db.engine.SqlDB(); err == nil {
+			defer db.engine.Release(sdb)
+			return sdb.Ping() == nil
 		}
 	}
 	return false

@@ -6,6 +6,7 @@ package mysqldb
 
 import (
 	"database/sql"
+	"sync"
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 
@@ -13,70 +14,20 @@ import (
 	mysql "github.com/exonlabs/mysql"
 )
 
-// Config represents the database configuration params.
-type Config struct {
-	// database name
-	Database string
-	// database server host
-	Host string
-	// database server port number
-	Port int
-	// database access username
-	Username string
-	// database access password
-	Password string
-	// connection character set
-	CharSet string
-	// connection collate
-	Collate string
-}
-
-// InitConfig initializes configuration from configuration dict.
-// it checks and returns error if not all options have valid values.
-//
-// The parsed options are:
-//   - database: (string) the database name - REQUIRED
-//   - host: (string) the database server IP or FQDN - REQUIRED
-//   - port: (int) the database server port number - REQUIRED
-//   - username: (string) the database  access username (if any)
-//   - password: (string) the database access password (if any)
-//   - charset: (string) connection character set
-//   - collate: (string) connection collate
-func (cfg *Config) InitConfig(d dictx.Dict) error {
-	cfg.Database = dictx.GetString(d, "database", "")
-	cfg.Host = dictx.GetString(d, "host", "")
-	cfg.Port = dictx.GetInt(d, "port", 0)
-	cfg.Username = dictx.GetString(d, "username", "")
-	cfg.Password = dictx.GetString(d, "password", "")
-	cfg.CharSet = dictx.GetString(d, "charset", "")
-	cfg.Collate = dictx.GetString(d, "collate", "")
-
-	// validations
-	if cfg.Database == "" {
-		return sqldb.ErrDBName
-	}
-	if cfg.Host == "" {
-		return sqldb.ErrDBHost
-	}
-	if cfg.Port == 0 {
-		return sqldb.ErrDBPort
-	}
-
-	return nil
-}
-
 // Engine represents the backend engine structure.
 type Engine struct {
 	// engine config
 	config *Config
 	// sql driver
 	sqlDB *sql.DB
+	// state numtex
+	muState sync.Mutex
 }
 
 // NewEngine creates new engine handler for the backend.
 func NewEngine(opts dictx.Dict) (*Engine, error) {
-	cfg := &Config{}
-	if err := cfg.InitConfig(opts); err != nil {
+	cfg, err := NewConfig(opts)
+	if err != nil {
 		return nil, err
 	}
 	return &Engine{
@@ -89,20 +40,41 @@ func (e *Engine) Backend() string {
 	return "mysql"
 }
 
-// SqlDB returns a backend driver handler.
+// SqlDB create or return existing backend driver handler.
 func (e *Engine) SqlDB() (*sql.DB, error) {
-	if e.sqlDB == nil {
-		if e.config == nil {
-			return nil, sqldb.ErrDBConfig
-		}
+	e.muState.Lock()
+	defer e.muState.Unlock()
 
-		// TODO: create sqlDB
+	// return existing driver handler
+	if e.sqlDB != nil {
+		return e.sqlDB, nil
 	}
 
+	if e.config == nil {
+		return nil, sqldb.ErrDBConfig
+	}
+	// TODO
 	return e.sqlDB, nil
 }
 
-// Release the backend driver handler.
+// Close shutsdown the backend driver handler and free resources.
+func (e *Engine) Close(sqldb *sql.DB) error {
+	e.muState.Lock()
+	defer e.muState.Unlock()
+
+	// do nothing if already closed
+	if e.sqlDB == nil {
+		return nil
+	}
+
+	if err := e.sqlDB.Close(); err != nil {
+		return err
+	}
+	e.sqlDB = nil
+	return nil
+}
+
+// Release frees the backend driver resources between sessions.
 func (e *Engine) Release(_ *sql.DB) error {
 	// nothing to do
 	return nil

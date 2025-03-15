@@ -12,14 +12,15 @@ import (
 )
 
 // InteractiveConfig gets the database configuration interactively from console.
+// it takes default options and return new input options.
 //
-// The parsed options are:
+// The parsed default options are:
 //   - database: (string) the database name - REQUIRED
 //   - host: (string) the database server IP or FQDN - REQUIRED
 //   - port: (int) the database server port number - REQUIRED
 //   - username: (string) the database  access username (if any)
 //   - password: (string) the database access password (if any)
-func InteractiveConfig(d dictx.Dict) (dictx.Dict, error) {
+func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
 	con, err := console.NewTermConsole()
 	if err != nil {
 		return nil, err
@@ -28,35 +29,35 @@ func InteractiveConfig(d dictx.Dict) (dictx.Dict, error) {
 
 	// get database name
 	db_name, err := con.Required().ReadValue(
-		"Enter database name", dictx.GetString(d, "database", ""))
+		"Enter database name", dictx.GetString(defaults, "database", ""))
 	if err != nil {
 		return nil, err
 	}
 
 	// get database host
 	db_host, err := con.Required().ReadValue(
-		"Enter database host", dictx.GetString(d, "host", "localhost"))
+		"Enter database host", dictx.GetString(defaults, "host", "localhost"))
 	if err != nil {
 		return nil, err
 	}
 
 	// get database port
 	db_port, err := con.Required().ReadNumber(
-		"Enter database port", int64(dictx.GetUint(d, "port", 3306)))
+		"Enter database port", int64(dictx.GetUint(defaults, "port", 3306)))
 	if err != nil {
 		return nil, err
 	}
 
 	// get database username
 	db_user, err := con.ReadValue(
-		"Enter database username", dictx.GetString(d, "username", ""))
+		"Enter database username", dictx.GetString(defaults, "username", ""))
 	if err != nil {
 		return nil, err
 	}
 
 	// get database password
 	db_pass, err := con.Hidden().ReadValue(
-		"Enter database password", dictx.GetString(d, "password", ""))
+		"Enter database password", dictx.GetString(defaults, "password", ""))
 	if err != nil {
 		return nil, err
 	} else if db_pass != "" {
@@ -66,7 +67,7 @@ func InteractiveConfig(d dictx.Dict) (dictx.Dict, error) {
 		}
 	}
 
-	cfg, err := dictx.Clone(d)
+	cfg, err := dictx.Clone(defaults)
 	if err != nil {
 		return nil, err
 	}
@@ -82,6 +83,7 @@ func InteractiveConfig(d dictx.Dict) (dictx.Dict, error) {
 }
 
 // InteractiveSetup performs an interactive console based database setup.
+// it takes database options and makes config validation.
 //
 // The parsed options are:
 //   - database: (string) the database name - REQUIRED
@@ -89,9 +91,9 @@ func InteractiveConfig(d dictx.Dict) (dictx.Dict, error) {
 //   - port: (int) the database server port number - REQUIRED
 //   - username: (string) the database  access username (if any)
 //   - password: (string) the database access password (if any)
-func InteractiveSetup(d dictx.Dict) error {
-	cfg := &Config{}
-	if err := cfg.InitConfig(d); err != nil {
+func InteractiveSetup(opts dictx.Dict) error {
+	cfg, err := NewConfig(opts)
+	if err != nil {
 		return err
 	}
 

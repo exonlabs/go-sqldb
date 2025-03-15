@@ -13,10 +13,11 @@ import (
 )
 
 // InteractiveConfig gets the database configuration interactively from console.
+// it takes default options and return new input options.
 //
-// The parsed options are:
+// The parsed default options are:
 //   - database: (string) the database file path
-func InteractiveConfig(d dictx.Dict) (dictx.Dict, error) {
+func InteractiveConfig(defaults dictx.Dict) (dictx.Dict, error) {
 	con, err := console.NewTermConsole()
 	if err != nil {
 		return nil, err
@@ -25,12 +26,12 @@ func InteractiveConfig(d dictx.Dict) (dictx.Dict, error) {
 
 	// get database path
 	db_path, err := con.Required().ReadValue(
-		"Enter database path", dictx.GetString(d, "database", ""))
+		"Enter database path", dictx.GetString(defaults, "database", ""))
 	if err != nil {
 		return nil, err
 	}
 
-	cfg, err := dictx.Clone(d)
+	cfg, err := dictx.Clone(defaults)
 	if err != nil {
 		return nil, err
 	}
@@ -42,12 +43,13 @@ func InteractiveConfig(d dictx.Dict) (dictx.Dict, error) {
 }
 
 // InteractiveSetup performs an interactive console based database setup.
+// it takes database options and makes config validation.
 //
 // The parsed options are:
 //   - database: (string) the database file path
-func InteractiveSetup(d dictx.Dict) error {
-	cfg := &Config{}
-	if err := cfg.InitConfig(d); err != nil {
+func InteractiveSetup(opts dictx.Dict) error {
+	cfg, err := NewConfig(opts)
+	if err != nil {
 		return err
 	}
 
