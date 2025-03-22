@@ -14,7 +14,7 @@ import (
 	"github.com/exonlabs/go-utils/pkg/logging"
 
 	"github.com/exonlabs/go-sqldb/pkg/sqldb"
-	mysql "github.com/exonlabs/mysql"
+	mysql "github.com/go-sql-driver/mysql"
 )
 
 // Engine represents the backend engine structure.

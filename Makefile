@@ -17,10 +17,8 @@ update-mod:
 
 build-tests:
 	@bash scripts/build_tests.sh
-	@export GO_BIN=go1.20.14 ; bash scripts/build_tests.sh
 .PHONY: build-tests
 
 build-examples:
 	@bash scripts/build_examples.sh
-	@export GO_BIN=go1.20.14 ; bash scripts/build_examples.sh
 .PHONY: build-examples
