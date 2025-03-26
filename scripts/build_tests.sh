@@ -73,6 +73,7 @@ function build_cgo {
 
 build sqldb
 build_cgo sqlite_mattn
+build sqlite_modernc
 build mysql_sqldriver
 build pgsql_libpq
 build mssql_microsoft
