@@ -77,5 +77,7 @@ build_cgo sqlite/basic_models_mattn
 build_cgo sqlite/extended_models
 build_cgo multi_backends
 
+build sqlite/basic_models_modernc
+
 
 echo -e "\n* Done\n"
