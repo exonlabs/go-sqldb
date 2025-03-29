@@ -5,7 +5,7 @@ module github.com/exonlabs/go-sqldb
 go 1.20
 
 require (
-	github.com/exonlabs/go-utils v0.5.0
+	github.com/exonlabs/go-utils v0.5.1
 	github.com/exonlabs/mysql v0.0.0-20250322155525-f1c02b08454e
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.24
