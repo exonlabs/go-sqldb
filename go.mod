@@ -7,13 +7,13 @@ go 1.23.0
 toolchain go1.24.1
 
 require (
-	github.com/exonlabs/go-utils v0.10.0
+	github.com/exonlabs/go-utils v0.10.1
 	github.com/go-sql-driver/mysql v1.9.1
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/microsoft/go-mssqldb v1.8.0
 	github.com/satori/go.uuid v1.2.0
-	modernc.org/sqlite v1.36.1
+	modernc.org/sqlite v1.36.3
 )
 
 require (
