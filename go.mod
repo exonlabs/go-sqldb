@@ -1,6 +1,6 @@
 module github.com/exonlabs/go-sqldb
 
-// version = "0.1.1"
+// version = "0.1.2.dev"
 
 go 1.20
 
